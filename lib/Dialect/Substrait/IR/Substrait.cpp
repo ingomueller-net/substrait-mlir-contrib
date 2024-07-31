@@ -45,11 +45,47 @@ void SubstraitDialect::initialize() {
 // Substrait operations
 //===----------------------------------------------------------------------===//
 
+namespace mlir {
+namespace substrait {
+
+static ParseResult parseAggregateRegions(
+    OpAsmParser &parser, Region &measuresRegion,
+    SmallVectorImpl<std::unique_ptr<Region>> &groupingsRegions);
+static void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
+                                  Region &measuresRegion,
+                                  MutableArrayRef<Region> groupingsRegions);
+
+} // namespace substrait
+} // namespace mlir
+
 #define GET_OP_CLASSES
 #include "substrait-mlir/Dialect/Substrait/IR/SubstraitOps.cpp.inc"
 
 namespace mlir {
 namespace substrait {
+
+ParseResult parseAggregateRegions(
+    OpAsmParser &parser, Region &measuresRegion,
+    SmallVectorImpl<std::unique_ptr<Region>> &groupingsRegions) {
+  StringRef keyword;
+  while (succeeded(
+      parser.parseOptionalKeyword(&keyword, {"measures", "grouping"}))) {
+    if (keyword == "measures") {
+      if (failed(parser.parseRegion(measuresRegion)))
+        return failure();
+    } else if (keyword == "grouping") {
+      auto groupingRegion = std::make_unique<Region>();
+      if (failed(parser.parseRegion(*groupingRegion)))
+        return failure();
+      groupingsRegions.push_back(std::move(groupingRegion));
+    }
+  }
+  return success();
+}
+
+void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
+                           Region &measuresRegion,
+                           MutableArrayRef<Region> groupingsRegions) {}
 
 /// Implement `SymbolOpInterface`.
 ::mlir::LogicalResult

@@ -354,6 +354,35 @@ class Substrait_RelOp<string mnemonic, list<Trait> traits = []> :
       ]>>
   ]>;
 
+def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
+    // DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
+  let summary = "Aggregate operation";
+  let description = [{
+    Represents a `AggregateRel ` message together with the `RelCommon` and the
+    messages it contains.
+
+    Example:
+
+    ```mlir
+    %0 = ...
+    %1 = aggregate by {
+      // XXX
+    }
+    ```
+  }];
+  let arguments = (ins Substrait_Relation:$input);
+  let results = (outs Substrait_Relation:$result);
+  let regions = (region
+    AnyRegion:$measures,
+    VariadicRegion<AnyRegion>:$groupings
+  );
+  let assemblyFormat = [{
+    $input custom<AggregateRegions>($measures, $groupings)
+    attr-dict `:` type($input) `->` type($result)
+  }];
+}
+
 def Substrait_CrossOp : Substrait_RelOp<"cross", [
     DeclareOpInterfaceMethods<InferTypeOpInterface>
   ]> {
