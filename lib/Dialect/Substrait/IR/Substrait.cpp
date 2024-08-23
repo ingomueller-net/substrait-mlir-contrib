@@ -113,6 +113,22 @@ void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
   printer.decreaseIndent();
 }
 
+LogicalResult AggregateOp::verifyRegions() {
+  // Verify that the regions have the input tuple as argument.
+  auto inputTupleType = getInput().getType();
+  for (auto [idx, region] : llvm::enumerate(getRegions())) {
+    if (region->empty()) // `measures` region is allowed to be empty.
+      continue;
+    if (region->getArgumentTypes() != TypeRange{inputTupleType})
+      return emitOpError() << "has region #" << idx
+                           << " with invalid argument types (expected: "
+                           << inputTupleType
+                           << ", got: " << region->getArgumentTypes() << ")";
+  }
+
+  return success();
+}
+
 /// Implement `SymbolOpInterface`.
 ::mlir::LogicalResult
 CallOp::verifySymbolUses(SymbolTableCollection &symbolTables) {

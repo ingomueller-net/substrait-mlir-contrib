@@ -384,6 +384,7 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     $input attr-dict `:` type($input) `->` type($result)
     custom<AggregateRegions>($measures, $groupings)
   }];
+  let hasRegionVerifier = 1;
   let extraClassDefinition = [{
     /// Implement OpAsmOpInterface.
     ::llvm::StringRef $cppClass::getDefaultDialect() {
