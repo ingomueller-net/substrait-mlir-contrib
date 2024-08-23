@@ -225,6 +225,7 @@ def Substrait_PlanRelOp : Substrait_Op<"relation", [
 def Substrait_YieldOp : Substrait_Op<"yield", [
     Terminator,
     ParentOneOf<[
+      "::mlir::substrait::AggregateOp",
       "::mlir::substrait::FilterOp",
       "::mlir::substrait::PlanRelOp",
       "::mlir::substrait::ProjectOp"
@@ -355,6 +356,8 @@ class Substrait_RelOp<string mnemonic, list<Trait> traits = []> :
   ]>;
 
 def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
+    DeclareOpInterfaceMethods<OpAsmOpInterface, ["getDefaultDialect"]>,
+    SingleBlockImplicitTerminator<"::mlir::substrait::YieldOp">,
     // DeclareOpInterfaceMethods<InferTypeOpInterface>
   ]> {
   let summary = "Aggregate operation";
@@ -375,11 +378,17 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
   let results = (outs Substrait_Relation:$result);
   let regions = (region
     AnyRegion:$measures,
-    VariadicRegion<AnyRegion>:$groupings
+    VariadicRegion<SizedRegion<1>>:$groupings
   );
   let assemblyFormat = [{
-    $input custom<AggregateRegions>($measures, $groupings)
-    attr-dict `:` type($input) `->` type($result)
+    $input attr-dict `:` type($input) `->` type($result)
+    custom<AggregateRegions>($measures, $groupings)
+  }];
+  let extraClassDefinition = [{
+    /// Implement OpAsmOpInterface.
+    ::llvm::StringRef $cppClass::getDefaultDialect() {
+      return SubstraitDialect::getDialectNamespace();
+    }
   }];
 }
 

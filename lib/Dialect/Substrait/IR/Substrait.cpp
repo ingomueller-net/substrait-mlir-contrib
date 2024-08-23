@@ -68,11 +68,17 @@ ParseResult parseAggregateRegions(
     OpAsmParser &parser, Region &measuresRegion,
     SmallVectorImpl<std::unique_ptr<Region>> &groupingsRegions) {
   StringRef keyword;
+  bool hasMeasuresRegion = false;
   while (succeeded(
       parser.parseOptionalKeyword(&keyword, {"measures", "grouping"}))) {
     if (keyword == "measures") {
+      if (hasMeasuresRegion) {
+        SMLoc loc = parser.getCurrentLocation();
+        return parser.emitError(loc, "can only have one 'measures' region");
+      }
       if (failed(parser.parseRegion(measuresRegion)))
         return failure();
+      hasMeasuresRegion = true;
     } else if (keyword == "grouping") {
       auto groupingRegion = std::make_unique<Region>();
       if (failed(parser.parseRegion(*groupingRegion)))
@@ -85,7 +91,27 @@ ParseResult parseAggregateRegions(
 
 void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
                            Region &measuresRegion,
-                           MutableArrayRef<Region> groupingsRegions) {}
+                           MutableArrayRef<Region> groupingsRegions) {
+  printer.increaseIndent();
+
+  // `groupings` regions.
+  for (Region &groupingsRegion : groupingsRegions) {
+    printer.printNewline();
+    printer.printKeywordOrString("grouping");
+    printer << " ";
+    printer.printRegion(groupingsRegion);
+  }
+
+  // `measures` regions.
+  if (!measuresRegion.empty()) {
+    printer.printNewline();
+    printer.printKeywordOrString("measures");
+    printer << " ";
+    printer.printRegion(measuresRegion);
+  }
+
+  printer.decreaseIndent();
+}
 
 /// Implement `SymbolOpInterface`.
 ::mlir::LogicalResult
