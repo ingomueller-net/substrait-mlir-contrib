@@ -355,6 +355,9 @@ class Substrait_RelOp<string mnemonic, list<Trait> traits = []> :
       ]>>
   ]>;
 
+def I64ArrayArrayAttr : TypedArrayAttrBase<I64ArrayAttr,
+                                      "64-bit integer array array attribute">;
+
 def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     DeclareOpInterfaceMethods<OpAsmOpInterface, ["getDefaultDialect"]>,
     SingleBlockImplicitTerminator<"::mlir::substrait::YieldOp">,
@@ -374,15 +377,18 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     }
     ```
   }];
-  let arguments = (ins Substrait_Relation:$input);
+  let arguments = (ins
+    Substrait_Relation:$input,
+    I64ArrayArrayAttr:$groupingSets
+  );
   let results = (outs Substrait_Relation:$result);
   let regions = (region
     AnyRegion:$measures,
-    VariadicRegion<SizedRegion<1>>:$groupings
+    AnyRegion:$groupings
   );
   let assemblyFormat = [{
     $input attr-dict `:` type($input) `->` type($result)
-    custom<AggregateRegions>($measures, $groupings)
+    custom<AggregateRegions>($measures, $groupings, $groupingSets)
   }];
   let hasRegionVerifier = 1;
   let extraClassDefinition = [{

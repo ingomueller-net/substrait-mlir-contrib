@@ -48,12 +48,14 @@ void SubstraitDialect::initialize() {
 namespace mlir {
 namespace substrait {
 
-static ParseResult parseAggregateRegions(
-    OpAsmParser &parser, Region &measuresRegion,
-    SmallVectorImpl<std::unique_ptr<Region>> &groupingsRegions);
+static ParseResult parseAggregateRegions(OpAsmParser &parser,
+                                         Region &measuresRegion,
+                                         Region &groupingsRegion,
+                                         ArrayAttr &groupingSetsAttr);
 static void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
                                   Region &measuresRegion,
-                                  MutableArrayRef<Region> groupingsRegions);
+                                  Region &groupingsRegion,
+                                  ArrayAttr groupingSetsAttr);
 
 } // namespace substrait
 } // namespace mlir
@@ -64,42 +66,88 @@ static void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
 namespace mlir {
 namespace substrait {
 
-ParseResult parseAggregateRegions(
-    OpAsmParser &parser, Region &measuresRegion,
-    SmallVectorImpl<std::unique_ptr<Region>> &groupingsRegions) {
-  StringRef keyword;
-  bool hasMeasuresRegion = false;
-  while (succeeded(
-      parser.parseOptionalKeyword(&keyword, {"measures", "grouping"}))) {
-    if (keyword == "measures") {
-      if (hasMeasuresRegion) {
+ParseResult parseAggregateRegions(OpAsmParser &parser, Region &measuresRegion,
+                                  Region &groupingsRegion,
+                                  ArrayAttr &groupingSetsAttr) {
+  MLIRContext *context = parser.getContext();
+
+  // Parse `measures` and `groupings` regions as well as `grouping_sets` attr.
+  bool hasMeasures = false;
+  bool hasGroupings = false;
+  bool hasGroupingSets = false;
+  {
+    auto ensureOneOccurrance = [&](bool &hasParsed,
+                                   StringRef name) -> LogicalResult {
+      if (hasParsed) {
         SMLoc loc = parser.getCurrentLocation();
-        return parser.emitError(loc, "can only have one 'measures' region");
+        return parser.emitError(loc, llvm::Twine("can only have one ") + name);
       }
-      if (failed(parser.parseRegion(measuresRegion)))
-        return failure();
-      hasMeasuresRegion = true;
-    } else if (keyword == "grouping") {
-      auto groupingRegion = std::make_unique<Region>();
-      if (failed(parser.parseRegion(*groupingRegion)))
-        return failure();
-      groupingsRegions.push_back(std::move(groupingRegion));
+      hasParsed = true;
+      return success();
+    };
+
+    StringRef keyword;
+    while (succeeded(parser.parseOptionalKeyword(
+        &keyword, {"measures", "groupings", "grouping_sets"}))) {
+      if (keyword == "measures") {
+        if (failed(ensureOneOccurrance(hasMeasures, "'measures' region")) ||
+            failed(parser.parseRegion(measuresRegion)))
+          return failure();
+      } else if (keyword == "groupings") {
+        if (failed(ensureOneOccurrance(hasGroupings, "'groupings' region")) ||
+            failed(parser.parseRegion(groupingsRegion)))
+          return failure();
+      } else if (keyword == "grouping_sets") {
+        if (failed(ensureOneOccurrance(hasGroupingSets,
+                                       "'grouping_sets' attribute")) ||
+            failed(parser.parseAttribute(groupingSetsAttr)))
+          return failure();
+      }
     }
   }
+
+  // Create default value of `grouping_sets` attr if not provided.
+  if (!hasGroupingSets) {
+    // If there is no `groupings` region, create only the empty grouping set.
+    if (!hasGroupings)
+      groupingSetsAttr = ArrayAttr::get(context, {});
+    // Otherwise, create the grouping set with all grouping columns.
+    else if (!groupingsRegion.empty()) {
+      auto yieldOp =
+          llvm::dyn_cast<YieldOp>(groupingsRegion.front().getTerminator());
+      if (yieldOp) {
+        unsigned numColumns = yieldOp->getNumOperands();
+        SmallVector<int64_t> allColumns;
+        llvm::copy(llvm::seq(0u, numColumns), std::back_inserter(allColumns));
+        IRRewriter rewriter(context);
+        ArrayAttr allColumnsAttr = rewriter.getI64ArrayAttr(allColumns);
+        groupingSetsAttr = rewriter.getArrayAttr({allColumnsAttr});
+      }
+    }
+  }
+
   return success();
 }
 
 void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
-                           Region &measuresRegion,
-                           MutableArrayRef<Region> groupingsRegions) {
+                           Region &measuresRegion, Region &groupingsRegion,
+                           ArrayAttr groupingSetsAttr) {
   printer.increaseIndent();
 
-  // `groupings` regions.
-  for (Region &groupingsRegion : groupingsRegions) {
+  // `groupings` region.
+  if (!groupingsRegion.empty()) {
     printer.printNewline();
-    printer.printKeywordOrString("grouping");
+    printer.printKeywordOrString("groupings");
     printer << " ";
     printer.printRegion(groupingsRegion);
+  }
+
+  // `grouping_sets` attribute.
+  if (groupingSetsAttr.size() > 1) {
+    printer.printNewline();
+    printer.printKeywordOrString("grouping_sets");
+    printer << " ";
+    printer.printAttribute(groupingSetsAttr);
   }
 
   // `measures` regions.
@@ -124,6 +172,38 @@ LogicalResult AggregateOp::verifyRegions() {
                            << " with invalid argument types (expected: "
                            << inputTupleType
                            << ", got: " << region->getArgumentTypes() << ")";
+  }
+
+  // Verify that the grouping sets refer to values yielded from `groupings` and
+  // that all yielded values are used.
+  {
+    auto yieldOp = llvm::cast<YieldOp>(getGroupings().front().getTerminator());
+    int64_t numGroupingColumns = yieldOp->getNumOperands();
+
+    // Check bounds, collect grouping columns.
+    llvm::SmallSet<int64_t, 16> allGroupingColumns;
+    for (auto [groupingSetIdx, columnAttrs] :
+         llvm::enumerate(getGroupingSets())) {
+      for (auto [columnIdx, columnAttr] :
+           llvm::enumerate(cast<ArrayAttr>(columnAttrs))) {
+        auto column = cast<IntegerAttr>(columnAttr).getInt();
+        if (column < 0 || column >= numGroupingColumns)
+          return emitOpError()
+                 << "has invalid grouping set #" << groupingSetIdx
+                 << ": column reference " << column << " (column #" << columnIdx
+                 << ") is out of bounds";
+        allGroupingColumns.insert(column);
+      }
+    }
+
+    // Check that all grouping columns are used.
+    if (static_cast<int64_t>(allGroupingColumns.size()) != numGroupingColumns) {
+      for (int64_t i : llvm::seq<int64_t>(0, numGroupingColumns)) {
+        if (!allGroupingColumns.contains(i))
+          return emitOpError() << "has 'groupings' region whose operand #" << i
+                               << " is not contained in any 'grouping_set'";
+      }
+    }
   }
 
   return success();
