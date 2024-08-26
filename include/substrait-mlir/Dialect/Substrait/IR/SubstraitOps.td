@@ -361,7 +361,7 @@ def I64ArrayArrayAttr : TypedArrayAttrBase<I64ArrayAttr,
 def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     DeclareOpInterfaceMethods<OpAsmOpInterface, ["getDefaultDialect"]>,
     SingleBlockImplicitTerminator<"::mlir::substrait::YieldOp">,
-    // DeclareOpInterfaceMethods<InferTypeOpInterface>
+    DeclareOpInterfaceMethods<InferTypeOpInterface>,
   ]> {
   let summary = "Aggregate operation";
   let description = [{

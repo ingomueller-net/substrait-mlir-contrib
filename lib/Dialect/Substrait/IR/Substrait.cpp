@@ -161,6 +161,36 @@ void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
   printer.decreaseIndent();
 }
 
+LogicalResult AggregateOp::inferReturnTypes(
+    MLIRContext *context, std::optional<Location> loc, ValueRange operands,
+    DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
+    llvm::SmallVectorImpl<Type> &inferredReturnTypes) {
+  auto *typedProperties = properties.as<Properties *>();
+  Region *groupings = regions[1];
+  Region *measures = regions[0];
+  SmallVector<Type> fieldTypes;
+
+  // The left-most output columns are the `groupings` columns, then the
+  // `measures` columns.
+  for (Region *region : ArrayRef{groupings, measures}) {
+    auto yieldOp = llvm::cast<YieldOp>(region->front().getTerminator());
+    llvm::append_range(fieldTypes, yieldOp.getOperandTypes());
+  }
+
+  // If there is more than one `grouping_set`, then we also have an additional
+  // `si32` column for the grouping set ID.
+  if (typedProperties->groupingSets.size() > 1) {
+    auto si32 = IntegerType::get(context, /*width=*/32, IntegerType::Signed);
+    fieldTypes.push_back(si32);
+  }
+
+  // Build tuple type from field types.
+  auto resultType = TupleType::get(context, fieldTypes);
+  inferredReturnTypes.push_back(resultType);
+
+  return success();
+}
+
 LogicalResult AggregateOp::verifyRegions() {
   // Verify that the regions have the input tuple as argument.
   auto inputTupleType = getInput().getType();
@@ -181,25 +211,24 @@ LogicalResult AggregateOp::verifyRegions() {
     int64_t numGroupingColumns = yieldOp->getNumOperands();
 
     // Check bounds, collect grouping columns.
-    llvm::SmallSet<int64_t, 16> allGroupingColumns;
-    for (auto [groupingSetIdx, columnAttrs] :
+    llvm::SmallSet<int64_t, 16> allGroupingRefs;
+    for (auto [groupingSetIdx, groupingSet] :
          llvm::enumerate(getGroupingSets())) {
-      for (auto [columnIdx, columnAttr] :
-           llvm::enumerate(cast<ArrayAttr>(columnAttrs))) {
-        auto column = cast<IntegerAttr>(columnAttr).getInt();
-        if (column < 0 || column >= numGroupingColumns)
-          return emitOpError()
-                 << "has invalid grouping set #" << groupingSetIdx
-                 << ": column reference " << column << " (column #" << columnIdx
-                 << ") is out of bounds";
-        allGroupingColumns.insert(column);
+      for (auto [refIdx, refAttr] :
+           llvm::enumerate(cast<ArrayAttr>(groupingSet))) {
+        auto ref = cast<IntegerAttr>(refAttr).getInt();
+        if (ref < 0 || ref >= numGroupingColumns)
+          return emitOpError() << "has invalid grouping set #" << groupingSetIdx
+                               << ": column reference " << ref << " (column #"
+                               << refIdx << ") is out of bounds";
+        allGroupingRefs.insert(ref);
       }
     }
 
     // Check that all grouping columns are used.
-    if (static_cast<int64_t>(allGroupingColumns.size()) != numGroupingColumns) {
+    if (static_cast<int64_t>(allGroupingRefs.size()) != numGroupingColumns) {
       for (int64_t i : llvm::seq<int64_t>(0, numGroupingColumns)) {
-        if (!allGroupingColumns.contains(i))
+        if (!allGroupingRefs.contains(i))
           return emitOpError() << "has 'groupings' region whose operand #" << i
                                << " is not contained in any 'grouping_set'";
       }
