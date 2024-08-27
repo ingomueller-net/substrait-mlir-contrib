@@ -173,6 +173,8 @@ LogicalResult AggregateOp::inferReturnTypes(
   // The left-most output columns are the `groupings` columns, then the
   // `measures` columns.
   for (Region *region : ArrayRef{groupings, measures}) {
+    if (region->empty())
+      continue;
     auto yieldOp = llvm::cast<YieldOp>(region->front().getTerminator());
     llvm::append_range(fieldTypes, yieldOp.getOperandTypes());
   }
@@ -204,8 +206,9 @@ LogicalResult AggregateOp::verifyRegions() {
                            << ", got: " << region->getArgumentTypes() << ")";
   }
 
-  // Verify that the grouping sets refer to values yielded from `groupings` and
-  // that all yielded values are used.
+  // Verify that the grouping sets refer to values yielded from `groupings`,
+  // that all yielded values are referred to, and that the references are in the
+  // correct order.
   {
     auto yieldOp = llvm::cast<YieldOp>(getGroupings().front().getTerminator());
     int64_t numGroupingColumns = yieldOp->getNumOperands();
@@ -221,7 +224,12 @@ LogicalResult AggregateOp::verifyRegions() {
           return emitOpError() << "has invalid grouping set #" << groupingSetIdx
                                << ": column reference " << ref << " (column #"
                                << refIdx << ") is out of bounds";
-        allGroupingRefs.insert(ref);
+        auto [_, hasInserted] = allGroupingRefs.insert(ref);
+        if (hasInserted &&
+            ref != static_cast<int64_t>(allGroupingRefs.size() - 1))
+          return emitOpError()
+                 << "has invalid grouping sets: the first occerrences of the "
+                    "column references must be densely increasing";
       }
     }
 
