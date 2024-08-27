@@ -90,3 +90,18 @@ substrait.plan version 0 : 42 : 1 {
     yield %1 : tuple<si1, si1>
   }
 }
+
+// -----
+
+// Verify that first occurrences of column references are densely increasing
+
+substrait.plan version 0 : 42 : 1 {
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    // expected-error@+2 {{one of 'groupings' or 'measures' must be specified}}
+    // expected-error@+1 {{'substrait.aggregate' op failed to infer returned types}}
+    %1 = aggregate %0 : tuple<si32> -> tuple<>
+      grouping_sets [[]]
+    yield %1 : tuple<>
+  }
+}

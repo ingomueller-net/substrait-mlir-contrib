@@ -118,7 +118,7 @@ ParseResult parseAggregateRegions(OpAsmParser &parser, Region &measuresRegion,
       if (yieldOp) {
         unsigned numColumns = yieldOp->getNumOperands();
         SmallVector<int64_t> allColumns;
-        llvm::copy(llvm::seq(0u, numColumns), std::back_inserter(allColumns));
+        llvm::append_range(allColumns, llvm::seq(0u, numColumns));
         IRRewriter rewriter(context);
         ArrayAttr allColumnsAttr = rewriter.getI64ArrayAttr(allColumns);
         groupingSetsAttr = rewriter.getArrayAttr({allColumnsAttr});
@@ -144,6 +144,7 @@ void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
 
   // `grouping_sets` attribute.
   if (groupingSetsAttr.size() > 1) {
+    // Note: A single grouping set is always of the form `seq(0, size)`.
     printer.printNewline();
     printer.printKeywordOrString("grouping_sets");
     printer << " ";
@@ -169,6 +170,8 @@ LogicalResult AggregateOp::inferReturnTypes(
   Region *groupings = regions[1];
   Region *measures = regions[0];
   SmallVector<Type> fieldTypes;
+  if (!loc)
+    loc = UnknownLoc::get(context);
 
   // The left-most output columns are the `groupings` columns, then the
   // `measures` columns.
@@ -184,6 +187,11 @@ LogicalResult AggregateOp::inferReturnTypes(
   if (typedProperties->groupingSets.size() > 1) {
     auto si32 = IntegerType::get(context, /*width=*/32, IntegerType::Signed);
     fieldTypes.push_back(si32);
+  }
+
+  if (fieldTypes.empty()) {
+    return ::emitError(loc.value())
+           << "one of 'groupings' or 'measures' must be specified";
   }
 
   // Build tuple type from field types.
@@ -210,8 +218,12 @@ LogicalResult AggregateOp::verifyRegions() {
   // that all yielded values are referred to, and that the references are in the
   // correct order.
   {
-    auto yieldOp = llvm::cast<YieldOp>(getGroupings().front().getTerminator());
-    int64_t numGroupingColumns = yieldOp->getNumOperands();
+    int64_t numGroupingColumns = 0;
+    if (!getGroupings().empty()) {
+      auto yieldOp =
+          llvm::cast<YieldOp>(getGroupings().front().getTerminator());
+      numGroupingColumns = yieldOp->getNumOperands();
+    }
 
     // Check bounds, collect grouping columns.
     llvm::SmallSet<int64_t, 16> allGroupingRefs;
