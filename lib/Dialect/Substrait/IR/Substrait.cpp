@@ -167,6 +167,7 @@ LogicalResult AggregateOp::inferReturnTypes(
     DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     llvm::SmallVectorImpl<Type> &inferredReturnTypes) {
   auto *typedProperties = properties.as<Properties *>();
+  assert(typedProperties && "could not get typed properties");
   Region *groupings = regions[1];
   Region *measures = regions[0];
   SmallVector<Type> fieldTypes;
@@ -187,11 +188,6 @@ LogicalResult AggregateOp::inferReturnTypes(
   if (typedProperties->groupingSets.size() > 1) {
     auto si32 = IntegerType::get(context, /*width=*/32, IntegerType::Signed);
     fieldTypes.push_back(si32);
-  }
-
-  if (fieldTypes.empty()) {
-    return ::emitError(loc.value())
-           << "one of 'groupings' or 'measures' must be specified";
   }
 
   // Build tuple type from field types.
@@ -254,6 +250,10 @@ LogicalResult AggregateOp::verifyRegions() {
       }
     }
   }
+
+  if (getGroupings().empty() && getMeasures().empty())
+    return emitOpError()
+           << "one of 'groupings' or 'measures' must be specified";
 
   return success();
 }
