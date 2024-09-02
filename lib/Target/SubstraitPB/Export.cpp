@@ -156,7 +156,7 @@ SubstraitExporter::exportOperation(CallOp op) {
     if (!definingOp)
       return op->emitOpError()
              << "with operand " << i
-             << " that was not produced by Substrait relation op";
+             << " that was not produced by Substrait expression op";
 
     FailureOr<std::unique_ptr<Expression>> expression =
         exportOperation(definingOp);
