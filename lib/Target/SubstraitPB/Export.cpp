@@ -43,6 +43,7 @@ public:
 #define DECLARE_EXPORT_FUNC(OP_TYPE, MESSAGE_TYPE)                             \
   FailureOr<std::unique_ptr<MESSAGE_TYPE>> exportOperation(OP_TYPE op);
 
+  DECLARE_EXPORT_FUNC(AggregateOp, Rel)
   DECLARE_EXPORT_FUNC(CallOp, Expression)
   DECLARE_EXPORT_FUNC(CrossOp, Rel)
   DECLARE_EXPORT_FUNC(EmitOp, Rel)
@@ -134,6 +135,132 @@ SubstraitExporter::exportType(Location loc, mlir::Type mlirType) {
 
   // TODO(ingomueller): Support other types.
   return emitError(loc) << "could not export unsupported type " << mlirType;
+}
+
+FailureOr<std::unique_ptr<Rel>>
+SubstraitExporter::exportOperation(AggregateOp op) {
+  // Build `RelCommon` message.
+  auto relCommon = std::make_unique<RelCommon>();
+  auto direct = std::make_unique<RelCommon::Direct>();
+  relCommon->set_allocated_direct(direct.release());
+
+  // Build `input` message.
+  auto inputOp =
+      llvm::dyn_cast_if_present<RelOpInterface>(op.getInput().getDefiningOp());
+  if (!inputOp)
+    return op->emitOpError("input was not produced by Substrait relation op");
+
+  FailureOr<std::unique_ptr<Rel>> inputRel = exportOperation(inputOp);
+  if (failed(inputRel))
+    return failure();
+
+  // Build `AggregateRel` message.
+  auto aggregateRel = std::make_unique<AggregateRel>();
+  aggregateRel->set_allocated_common(relCommon.release());
+  aggregateRel->set_allocated_input(inputRel->release());
+
+  // Build `groupings` field if any.
+  if (!op.getGroupings().empty()) {
+    auto yieldOp =
+        llvm::cast<YieldOp>(op.getGroupings().front().getTerminator());
+
+    // Export values yielded from `groupings` region as `Expression` messages.
+    SmallVector<std::unique_ptr<Expression>> columnExpressions;
+    {
+      auto columnValues = yieldOp->getOperands();
+      columnExpressions.reserve(columnValues.size());
+      for (auto [columnIdx, columnVal] : llvm::enumerate(columnValues)) {
+        // Build `Expression` message for operand.
+        auto definingOp = llvm::dyn_cast_if_present<ExpressionOpInterface>(
+            columnVal.getDefiningOp());
+        if (!definingOp)
+          return op->emitOpError()
+                 << "yields grouping column " << columnIdx
+                 << " that was not produced by Substrait expression op";
+
+        FailureOr<std::unique_ptr<Expression>> columnExpr =
+            exportOperation(definingOp);
+        if (failed(columnExpr))
+          return failure();
+
+        columnExpressions.push_back(std::move(columnExpr.value()));
+      }
+    }
+
+    // Populate repeated `groupings` field according to grouping sets.
+    for (auto groupingSet : op.getGroupingSets().getAsRange<ArrayAttr>()) {
+      AggregateRel::Grouping *grouping = aggregateRel->add_groupings();
+      for (auto columnIdxAttr : groupingSet.getAsRange<IntegerAttr>()) {
+        // Look up exported expression and add as `grouping_expression`.
+        int64_t columnIdx = columnIdxAttr.getInt();
+        Expression *columnExpr = columnExpressions[columnIdx].get();
+        *grouping->add_grouping_expressions() = *columnExpr;
+      }
+    }
+  }
+
+  if (!op.getMeasures().empty()) {
+    auto yieldOp =
+        llvm::cast<YieldOp>(op.getMeasures().front().getTerminator());
+    for (auto [measureIdx, measureVal] :
+         llvm::enumerate(yieldOp->getOperands())) {
+      // Build `Expression` message for operand.
+      auto callOp =
+          llvm::dyn_cast_if_present<CallOp>(measureVal.getDefiningOp());
+      if (!callOp)
+        return op->emitOpError() << "yields measure column " << measureIdx
+                                 << " that was not produced by 'call' op";
+
+      FailureOr<std::unique_ptr<Expression>> columnExpr =
+          exportOperation(callOp);
+      if (failed(columnExpr))
+        return failure();
+
+      // XXX: Factor out common code from `CallOp`.
+      // Build `AggregateFunction` message.
+      auto aggregateFunction = std::make_unique<AggregateFunction>();
+      int32_t anchor = lookupAnchor(callOp, callOp.getCallee());
+      aggregateFunction->set_function_reference(anchor);
+
+      // Build messages for arguments.
+      for (auto [i, operand] : llvm::enumerate(callOp->getOperands())) {
+        // Build `Expression` message for operand.
+        auto definingOp = llvm::dyn_cast_if_present<ExpressionOpInterface>(
+            operand.getDefiningOp());
+        if (!definingOp)
+          return callOp->emitOpError()
+                 << "with operand " << i
+                 << " that was not produced by Substrait expression op";
+
+        FailureOr<std::unique_ptr<Expression>> expression =
+            exportOperation(definingOp);
+        if (failed(expression))
+          return failure();
+
+        // Build `FunctionArgument` message and add to arguments.
+        FunctionArgument arg;
+        arg.set_allocated_value(expression->release());
+        *aggregateFunction->add_arguments() = arg;
+      }
+
+      // Build message for `output_type`.
+      FailureOr<std::unique_ptr<proto::Type>> outputType =
+          exportType(callOp.getLoc(), callOp.getResult().getType());
+      if (failed(outputType))
+        return failure();
+      aggregateFunction->set_allocated_output_type(outputType->release());
+
+      // Add `AggregateFunction` to `measures`.
+      AggregateRel::Measure *measure = aggregateRel->add_measures();
+      measure->set_allocated_measure(aggregateFunction.release());
+    }
+  }
+
+  // Build `Rel` message.
+  auto rel = std::make_unique<Rel>();
+  rel->set_allocated_aggregate(aggregateRel.release());
+
+  return rel;
 }
 
 FailureOr<std::unique_ptr<Expression>>
@@ -765,6 +892,7 @@ SubstraitExporter::exportOperation(RelOpInterface op) {
   return llvm::TypeSwitch<Operation *, FailureOr<std::unique_ptr<Rel>>>(op)
       .Case<
           // clang-format off
+          AggregateOp,
           CrossOp,
           EmitOp,
           FieldReferenceOp,
