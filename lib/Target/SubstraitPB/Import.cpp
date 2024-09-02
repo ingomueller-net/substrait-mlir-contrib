@@ -46,6 +46,7 @@ namespace {
   static FailureOr<OP_TYPE> import##MESSAGE_TYPE(ImplicitLocOpBuilder builder, \
                                                  const ARG_TYPE &message);
 
+DECLARE_IMPORT_FUNC(AggregateRel, Rel, AggregateOp)
 DECLARE_IMPORT_FUNC(CrossRel, Rel, CrossOp)
 DECLARE_IMPORT_FUNC(SetRel, Rel, UnionDistinctOp)
 DECLARE_IMPORT_FUNC(FilterRel, Rel, FilterOp)
@@ -118,6 +119,108 @@ static mlir::FailureOr<mlir::Type> importType(MLIRContext *context,
                           << desc->name();
   }
   }
+}
+
+static mlir::FailureOr<AggregateOp>
+importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
+  using Grouping = AggregateRel::Grouping;
+  using Measure = AggregateRel::Measure;
+
+  MLIRContext *context = builder.getContext();
+  Location loc = UnknownLoc::get(context);
+
+  const AggregateRel &aggregateRel = message.aggregate();
+
+  // Import input.
+  const Rel &inputRel = aggregateRel.input();
+  mlir::FailureOr<RelOpInterface> inputOp = importRel(builder, inputRel);
+  if (failed(inputOp))
+    return failure();
+  Value inputVal = inputOp.value()->getResult(0);
+
+  // Import measures if any.
+  auto measuresRegion = std::make_unique<Region>();
+  if (aggregateRel.measures_size() > 0) {
+    Block *measuresBlock = &measuresRegion->emplaceBlock();
+    measuresBlock->addArgument(inputVal.getType(), loc);
+
+    OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(measuresBlock);
+    SmallVector<Value> measuresValues;
+    measuresValues.reserve(aggregateRel.measures_size());
+    for (const Measure &measure : aggregateRel.measures()) {
+      const AggregateFunction &aggrFunc = measure.measure();
+
+      // XXX: Factor out common code with `ScalarFunction`.
+      // Import `output_type`.
+      const proto::Type &outputType = aggrFunc.output_type();
+      FailureOr<mlir::Type> mlirOutputType = importType(context, outputType);
+      if (failed(mlirOutputType))
+        return failure();
+
+      // Import `arguments`.
+      SmallVector<Value> operands;
+      for (const FunctionArgument &arg : aggrFunc.arguments()) {
+        // Error out on unsupported cases.
+        // TODO(ingomueller): Support other function argument types.
+        if (!arg.has_value()) {
+          const pb::FieldDescriptor *desc =
+              FunctionArgument::GetDescriptor()->FindFieldByNumber(
+                  arg.arg_type_case());
+          return emitError(loc)
+                 << Twine("unsupported arg type: ") + desc->name();
+        }
+
+        // Handle `value` case.
+        const Expression &value = arg.value();
+        FailureOr<ExpressionOpInterface> expression =
+            importExpression(builder, value);
+        if (failed(expression))
+          return failure();
+        operands.push_back((*expression)->getResult(0));
+      }
+
+      // Import `function_reference` field.
+      int32_t anchor = aggrFunc.function_reference();
+      std::string calleeSymName = buildFuncSymName(anchor);
+
+      // Create op.
+      auto callOp = builder.create<CallOp>(mlirOutputType.value(),
+                                           calleeSymName, operands);
+
+      measuresValues.push_back(callOp.getResult());
+    }
+
+    builder.create<YieldOp>(measuresValues);
+  }
+
+  // Import groupings if any.
+  auto groupingsRegion = std::make_unique<Region>();
+  ArrayAttr groupingSets;
+  {
+    SmallVector<Attribute> groupingSetsAttrs;
+    groupingSetsAttrs.reserve(aggregateRel.groupings_size());
+    groupingSets = ArrayAttr::get(builder.getContext(), groupingSetsAttrs);
+  }
+  // Infer return types. This cannot be done by the builder below but provided
+  // explicitly because the return type depends on the regions, which the
+  // builder doesn't have yet.
+  SmallVector<Region *> regions = {measuresRegion.get(), groupingsRegion.get()};
+  AggregateOp::Properties properties;
+  properties.groupingSets = groupingSets;
+  SmallVector<mlir::Type> returnTypes;
+  if (failed(AggregateOp::inferReturnTypes(context, loc, inputVal, {},
+                                           OpaqueProperties(&properties),
+                                           regions, returnTypes)))
+    return failure();
+
+  // Build `AggregateOp` and move regions into it.
+  auto aggregateOp =
+      builder.create<AggregateOp>(returnTypes, inputVal, groupingSets);
+  aggregateOp.getMeasures().takeBody(*measuresRegion);
+  aggregateOp.getGroupings().takeBody(*groupingsRegion);
+
+  return aggregateOp;
 }
 
 static mlir::FailureOr<CrossOp> importCrossRel(ImplicitLocOpBuilder builder,
@@ -563,6 +666,9 @@ static mlir::FailureOr<RelOpInterface> importRel(ImplicitLocOpBuilder builder,
   Rel::RelTypeCase relType = message.rel_type_case();
   FailureOr<RelOpInterface> maybeOp;
   switch (relType) {
+  case Rel::RelTypeCase::kAggregate:
+    maybeOp = importAggregateRel(builder, message);
+    break;
   case Rel::RelTypeCase::kCross:
     maybeOp = importCrossRel(builder, message);
     break;
