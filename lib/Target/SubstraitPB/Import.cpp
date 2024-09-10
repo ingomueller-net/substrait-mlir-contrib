@@ -14,6 +14,7 @@
 #include "mlir/IR/OwningOpRef.h"
 #include "substrait-mlir/Dialect/Substrait/IR/Substrait.h"
 #include "substrait-mlir/Target/SubstraitPB/Options.h"
+#include "llvm/ADT/SmallSet.h"
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/text_format.h>
@@ -33,14 +34,13 @@ namespace pb = google::protobuf;
 namespace {
 
 // Copied from
-// https://github.com/llvm/llvm-project/blob/dea33c8/mlir/lib/Transforms/CSE.cpp
-// modified to include result values for hash.
+// https://github.com/llvm/llvm-project/blob/dea33c/mlir/lib/Transforms/CSE.cpp.
 struct SimpleOperationInfo : public llvm::DenseMapInfo<Operation *> {
   static unsigned getHashValue(const Operation *opC) {
     return OperationEquivalence::computeHash(
         const_cast<Operation *>(opC),
         /*hashOperands=*/OperationEquivalence::directHashValue,
-        /*hashResults=*/OperationEquivalence::directHashValue,
+        /*hashResults=*/OperationEquivalence::ignoreHashValue,
         OperationEquivalence::IgnoreLocations);
   }
   static bool isEqual(const Operation *lhsC, const Operation *rhsC) {
@@ -226,9 +226,6 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
     Block *groupingsBlock = &groupingsRegion->emplaceBlock();
     groupingsBlock->addArgument(inputVal.getType(), loc);
 
-    auto tempBlock = std::make_unique<Block>();
-    tempBlock->addArgument(inputVal.getType(), loc);
-
     // Assemble grouping sets (i.e., references/IDs) and grouping expressions.
     SmallVector<Value> groupingExprValues;
     groupingSetsAttrs.reserve(aggregateRel.groupings_size());
@@ -242,7 +239,7 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
       for (const Expression &expression : grouping.grouping_expressions()) {
         // Import expression message into temporary region.
         OpBuilder::InsertionGuard guard(builder);
-        builder.setInsertionPointToStart(tempBlock.get());
+        builder.setInsertionPointToStart(groupingsBlock);
         FailureOr<ExpressionOpInterface> exprOp =
             importExpression(builder, expression);
         if (failed(exprOp))
@@ -251,15 +248,22 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
         // Create or look-up ID.
         auto [it, hasInserted] = groupingExprOps.try_emplace(exprOp.value());
 
-        // Assign new ID and move imported expressions in groupings region.
+        // If it's a new expression, assign new ID.
         if (hasInserted) {
           it->second = groupingExprOps.size() - 1;
           groupingExprValues.emplace_back(exprOp.value()->getResult(0));
-
-          auto &groupingOps = groupingsBlock->getOperations();
-          groupingOps.splice(groupingOps.end(), tempBlock->getOperations());
-          tempBlock->getArgument(0).replaceAllUsesWith(
-              groupingsBlock->getArgument(0));
+        } else {
+          // Otherwise, undo import by removing ops recursively.
+          llvm::SmallVector<Operation *> worklist;
+          worklist.push_back(exprOp.value());
+          while (!worklist.empty()) {
+            Operation *nextOp = worklist.pop_back_val();
+            for (Value v : nextOp->getOperands()) {
+              if (Operation *defOp = v.getDefiningOp())
+                worklist.push_back(defOp);
+            }
+            nextOp->erase();
+          }
         }
         expressionIDs.push_back(it->second);
       }
