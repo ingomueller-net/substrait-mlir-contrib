@@ -226,18 +226,24 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
     Block *groupingsBlock = &groupingsRegion->emplaceBlock();
     groupingsBlock->addArgument(inputVal.getType(), loc);
 
-    // Assemble grouping sets (i.e., references/IDs) and grouping expressions.
+    // Grouping expressions, i.e., values yielded from `groupings`.
     SmallVector<Value> groupingExprValues;
     groupingSetsAttrs.reserve(aggregateRel.groupings_size());
 
+    // Ops that produce unique grouping expressions. In the protobuf messages,
+    // each grouping set repeats the grouping expressions whereas the
+    // `AggregateOp` yields unique grouping expressions from the `groupings`
+    // region and represents the grouping sets as references to those.
     llvm::SmallDenseMap<Operation *, int64_t, 16, SimpleOperationInfo>
         groupingExprOps;
+
+    // Import one grouping set at a time.
     for (const Grouping &grouping : aggregateRel.groupings()) {
-      // Collect IDs of grouping expressions for this grouping set.
-      SmallVector<int64_t> expressionIDs;
-      expressionIDs.reserve(grouping.grouping_expressions_size());
+      // Collect references of grouping expressions for this grouping set.
+      SmallVector<int64_t> expressionRefs;
+      expressionRefs.reserve(grouping.grouping_expressions_size());
       for (const Expression &expression : grouping.grouping_expressions()) {
-        // Import expression message into temporary region.
+        // Import expression message into `groupings` region.
         OpBuilder::InsertionGuard guard(builder);
         builder.setInsertionPointToStart(groupingsBlock);
         FailureOr<ExpressionOpInterface> exprOp =
@@ -245,10 +251,10 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
         if (failed(exprOp))
           return failure();
 
-        // Create or look-up ID.
+        // Create or look-up reference.
         auto [it, hasInserted] = groupingExprOps.try_emplace(exprOp.value());
 
-        // If it's a new expression, assign new ID.
+        // If it's a new expression, assign new reference.
         if (hasInserted) {
           it->second = groupingExprOps.size() - 1;
           groupingExprValues.emplace_back(exprOp.value()->getResult(0));
@@ -265,11 +271,13 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
             nextOp->erase();
           }
         }
-        expressionIDs.push_back(it->second);
+
+        // Remember reference for grouping set attribute.
+        expressionRefs.push_back(it->second);
       }
 
-      // Collect current grouping set.
-      ArrayAttr groupingSet = builder.getI64ArrayAttr(expressionIDs);
+      // Create `ArrayAttr` for current grouping set.
+      ArrayAttr groupingSet = builder.getI64ArrayAttr(expressionRefs);
       groupingSetsAttrs.push_back(groupingSet);
     }
 
@@ -285,6 +293,7 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
   // Infer return types. This cannot be done by the builder below but provided
   // explicitly because the return type depends on the regions, which the
   // builder doesn't have yet.
+  // XXX: Move this to custom builder?
   SmallVector<Region *> regions = {measuresRegion.get(), groupingsRegion.get()};
   AggregateOp::Properties properties;
   properties.groupingSets = groupingSets;
