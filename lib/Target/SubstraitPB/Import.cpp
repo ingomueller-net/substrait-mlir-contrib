@@ -32,6 +32,31 @@ namespace pb = google::protobuf;
 
 namespace {
 
+// Copied from
+// https://github.com/llvm/llvm-project/blob/dea33c8/mlir/lib/Transforms/CSE.cpp
+// modified to include result values for hash.
+struct SimpleOperationInfo : public llvm::DenseMapInfo<Operation *> {
+  static unsigned getHashValue(const Operation *opC) {
+    return OperationEquivalence::computeHash(
+        const_cast<Operation *>(opC),
+        /*hashOperands=*/OperationEquivalence::directHashValue,
+        /*hashResults=*/OperationEquivalence::directHashValue,
+        OperationEquivalence::IgnoreLocations);
+  }
+  static bool isEqual(const Operation *lhsC, const Operation *rhsC) {
+    auto *lhs = const_cast<Operation *>(lhsC);
+    auto *rhs = const_cast<Operation *>(rhsC);
+    if (lhs == rhs)
+      return true;
+    if (lhs == getTombstoneKey() || lhs == getEmptyKey() ||
+        rhs == getTombstoneKey() || rhs == getEmptyKey())
+      return false;
+    return OperationEquivalence::isEquivalentTo(
+        const_cast<Operation *>(lhsC), const_cast<Operation *>(rhsC),
+        OperationEquivalence::IgnoreLocations);
+  }
+};
+
 // Forward declaration for the import function of the given message type.
 //
 // We need one such function for most message types that we want to import. The
@@ -196,12 +221,63 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
 
   // Import groupings if any.
   auto groupingsRegion = std::make_unique<Region>();
-  ArrayAttr groupingSets;
-  {
-    SmallVector<Attribute> groupingSetsAttrs;
+  SmallVector<Attribute> groupingSetsAttrs;
+  if (aggregateRel.groupings_size() > 0) {
+    Block *groupingsBlock = &groupingsRegion->emplaceBlock();
+    groupingsBlock->addArgument(inputVal.getType(), loc);
+
+    auto tempBlock = std::make_unique<Block>();
+    tempBlock->addArgument(inputVal.getType(), loc);
+
+    // Assemble grouping sets (i.e., references/IDs) and grouping expressions.
+    SmallVector<Value> groupingExprValues;
     groupingSetsAttrs.reserve(aggregateRel.groupings_size());
-    groupingSets = ArrayAttr::get(builder.getContext(), groupingSetsAttrs);
+
+    llvm::SmallDenseMap<Operation *, int64_t, 16, SimpleOperationInfo>
+        groupingExprOps;
+    for (const Grouping &grouping : aggregateRel.groupings()) {
+      // Collect IDs of grouping expressions for this grouping set.
+      SmallVector<int64_t> expressionIDs;
+      expressionIDs.reserve(grouping.grouping_expressions_size());
+      for (const Expression &expression : grouping.grouping_expressions()) {
+        // Import expression message into temporary region.
+        OpBuilder::InsertionGuard guard(builder);
+        builder.setInsertionPointToStart(tempBlock.get());
+        FailureOr<ExpressionOpInterface> exprOp =
+            importExpression(builder, expression);
+        if (failed(exprOp))
+          return failure();
+
+        // Create or look-up ID.
+        auto [it, hasInserted] = groupingExprOps.try_emplace(exprOp.value());
+
+        // Assign new ID and move imported expressions in groupings region.
+        if (hasInserted) {
+          it->second = groupingExprOps.size() - 1;
+          groupingExprValues.emplace_back(exprOp.value()->getResult(0));
+
+          auto &groupingOps = groupingsBlock->getOperations();
+          groupingOps.splice(groupingOps.end(), tempBlock->getOperations());
+          tempBlock->getArgument(0).replaceAllUsesWith(
+              groupingsBlock->getArgument(0));
+        }
+        expressionIDs.push_back(it->second);
+      }
+
+      // Collect current grouping set.
+      ArrayAttr groupingSet = builder.getI64ArrayAttr(expressionIDs);
+      groupingSetsAttrs.push_back(groupingSet);
+    }
+
+    // Assemble `YieldOp` of groupings region.
+    OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToEnd(groupingsBlock);
+    builder.create<YieldOp>(loc, groupingExprValues);
   }
+
+  // Create attribute for grouping sets.
+  auto groupingSets = ArrayAttr::get(builder.getContext(), groupingSetsAttrs);
+
   // Infer return types. This cannot be done by the builder below but provided
   // explicitly because the return type depends on the regions, which the
   // builder doesn't have yet.
