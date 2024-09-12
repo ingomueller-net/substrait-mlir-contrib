@@ -251,6 +251,9 @@ LogicalResult AggregateOp::verifyRegions() {
     }
   }
 
+  // XXX: Verify that `measures` region yields only values produced by
+  // `AggregateFunction`s?
+
   if (getGroupings().empty() && getMeasures().empty())
     return emitOpError()
            << "one of 'groupings' or 'measures' must be specified";

@@ -166,7 +166,8 @@ SubstraitExporter::exportOperation(AggregateOp op) {
 
     // Export values yielded from `groupings` region as `Expression` messages.
     SmallVector<std::unique_ptr<Expression>> columnExpressions;
-    // XXX: We have to fail export if the expressions aren't all unique.
+    // XXX: We have to fail export if the expressions aren't all unique (after
+    // CSE).
     {
       auto columnValues = yieldOp->getOperands();
       columnExpressions.reserve(columnValues.size());
