@@ -159,17 +159,22 @@ SubstraitExporter::exportOperation(AggregateOp op) {
   aggregateRel->set_allocated_common(relCommon.release());
   aggregateRel->set_allocated_input(inputRel->release());
 
-  // Build `groupings` field if any.
-  if (!op.getGroupings().empty()) {
-    auto yieldOp =
-        llvm::cast<YieldOp>(op.getGroupings().front().getTerminator());
-
+  // Build `groupings` field.
+  {
     // Export values yielded from `groupings` region as `Expression` messages.
     SmallVector<std::unique_ptr<Expression>> columnExpressions;
     // XXX: We have to fail export if the expressions aren't all unique (after
     // CSE).
     {
-      auto columnValues = yieldOp->getOperands();
+      // Get grouping expressions if any.
+      ArrayRef<Value> emptyValueRange;
+      ValueRange columnValues = emptyValueRange;
+      if (!op.getGroupings().empty()) {
+        auto yieldOp =
+            llvm::cast<YieldOp>(op.getGroupings().front().getTerminator());
+        columnValues = yieldOp->getOperands();
+      }
+
       columnExpressions.reserve(columnValues.size());
       for (auto [columnIdx, columnVal] : llvm::enumerate(columnValues)) {
         // Build `Expression` message for operand.
@@ -212,6 +217,7 @@ SubstraitExporter::exportOperation(AggregateOp op) {
       if (!callOp)
         return op->emitOpError() << "yields measure column " << measureIdx
                                  << " that was not produced by 'call' op";
+      assert(callOp.isAggregate() && "expected aggregate function");
 
       FailureOr<std::unique_ptr<Expression>> columnExpr =
           exportOperation(callOp);
@@ -223,6 +229,10 @@ SubstraitExporter::exportOperation(AggregateOp op) {
       auto aggregateFunction = std::make_unique<AggregateFunction>();
       int32_t anchor = lookupAnchor(callOp, callOp.getCallee());
       aggregateFunction->set_function_reference(anchor);
+      AggregationInvocation invocation =
+          callOp.getAggregationInvocation().value();
+      aggregateFunction->set_invocation(
+          static_cast<AggregateFunction::AggregationInvocation>(invocation));
 
       // Build messages for arguments.
       for (auto [i, operand] : llvm::enumerate(callOp->getOperands())) {
