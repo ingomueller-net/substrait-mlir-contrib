@@ -355,8 +355,9 @@ class Substrait_RelOp<string mnemonic, list<Trait> traits = []> :
       ]>>
   ]>;
 
-def I64ArrayArrayAttr : TypedArrayAttrBase<I64ArrayAttr,
-                                      "64-bit integer array array attribute">;
+def I64ArrayArrayAttr : TypedArrayAttrBase<
+    I64ArrayAttr, "64-bit integer array array attribute"
+  >;
 
 def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     DeclareOpInterfaceMethods<OpAsmOpInterface, ["getDefaultDialect"]>,
