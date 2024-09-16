@@ -28,7 +28,8 @@ substrait.plan version 0 : 42 : 1 {
       measures {
       ^bb0(%arg : tuple<si1>):
         %2 = literal 0 : si1
-        yield %2 : si1
+        %3 = call @function(%2) aggregate : (si1) -> si1
+        yield %3 : si1
       }
     yield %1 : tuple<si1>
   }
@@ -55,7 +56,8 @@ substrait.plan version 0 : 42 : 1 {
 
 // -----
 
-// Verify that first occurrences of column references are densely increasing
+// Verify that it's detected if first occurrences of column references are not
+// densely increasing.
 
 substrait.plan version 0 : 42 : 1 {
   relation {
@@ -74,7 +76,7 @@ substrait.plan version 0 : 42 : 1 {
 
 // -----
 
-// Verify that first occurrences of column references are densely increasing
+// Verify that yielded value unused by all grouping sets is detected.
 
 substrait.plan version 0 : 42 : 1 {
   relation {
@@ -93,15 +95,52 @@ substrait.plan version 0 : 42 : 1 {
 
 // -----
 
-// Verify that first occurrences of column references are densely increasing
+// Verify that missing `groupings` *and* `measures regions is detected.
 
 substrait.plan version 0 : 42 : 1 {
   relation {
     %0 = named_table @t1 as ["a"] : tuple<si32>
-    // expected-error@+2 {{one of 'groupings' or 'measures' must be specified}}
-    // expected-error@+1 {{'substrait.aggregate' op failed to infer returned types}}
+    // expected-error@+1 {{one of 'groupings' or 'measures' must be specified}}
     %1 = aggregate %0 : tuple<si32> -> tuple<>
       grouping_sets [[]]
     yield %1 : tuple<>
+  }
+}
+
+// -----
+
+// Verify that unaggregated measure is detected.
+
+substrait.plan version 0 : 42 : 1 {
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    // expected-error-re@+1 {{'substrait.aggregate' op yields value from 'measures' region that was not produced by an aggregate function: {{.*}}substrait.call{{.*}}}}
+    %1 = aggregate %0 : tuple<si32> -> tuple<si32>
+      measures {
+      ^bb0(%arg : tuple<si32>):
+        %2 = literal 0 : si32
+        %3 = call @function(%2) : (si32) -> si32
+        yield %3 : si32
+      }
+    yield %1 : tuple<si32>
+  }
+}
+
+// -----
+
+// Verify that invalid aggregation invocation mode is detected.
+
+substrait.plan version 0 : 42 : 1 {
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    %1 = aggregate %0 : tuple<si32> -> tuple<si32>
+      measures {
+      ^bb0(%arg : tuple<si32>):
+        %2 = literal 0 : si32
+        // expected-error@+1 {{custom op 'substrait.call' has invalid aggregate invocation type specification: foo}}
+        %3 = call @function(%2) aggregate foo : (si32) -> si32
+        yield %3 : si32
+      }
+    yield %1 : tuple<si32>
   }
 }

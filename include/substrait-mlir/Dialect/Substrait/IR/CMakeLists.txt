@@ -1,6 +1,9 @@
 add_mlir_dialect(SubstraitOps substrait)
 add_dependencies(MLIRSubstraitDialect MLIRSubstraitOpsIncGen)
 
+set(LLVM_TARGET_DEFINITIONS SubstraitEnums.td)
+mlir_tablegen(SubstraitEnums.h.inc -gen-enum-decls)
+mlir_tablegen(SubstraitEnums.cpp.inc -gen-enum-defs)
 set(LLVM_TARGET_DEFINITIONS SubstraitInterfaces.td)
 mlir_tablegen(SubstraitOpInterfaces.h.inc -gen-op-interface-decls)
 mlir_tablegen(SubstraitOpInterfaces.cpp.inc -gen-op-interface-defs)

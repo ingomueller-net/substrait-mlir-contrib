@@ -209,9 +209,21 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
       int32_t anchor = aggrFunc.function_reference();
       std::string calleeSymName = buildFuncSymName(anchor);
 
+      // Import `function_reference` field.
+      AggregateFunction::AggregationInvocation invocation =
+          aggrFunc.invocation();
+      std::optional<AggregationInvocation> invocationEnum =
+          symbolizeAggregationInvocation(invocation);
+      if (!invocationEnum.has_value())
+        return emitError(loc)
+               << "unsupported enum value for aggregate function invocation";
+      auto invocationAttr =
+          AggregationInvocationAttr::get(context, invocationEnum.value());
+
       // Create op.
-      auto callOp = builder.create<CallOp>(mlirOutputType.value(),
-                                           calleeSymName, operands);
+      auto callOp = builder.create<CallOp>(
+          mlirOutputType.value(), calleeSymName, operands, invocationAttr);
+      assert(callOp.isAggregate() && "expected to build aggregate function");
 
       measuresValues.push_back(callOp.getResult());
     }
@@ -846,6 +858,7 @@ importScalarFunction(ImplicitLocOpBuilder builder,
   // Create op.
   auto callOp =
       builder.create<CallOp>(mlirOutputType.value(), calleeSymName, operands);
+  assert(callOp.isScalar() && "expected to build scalar function");
 
   return {callOp};
 }

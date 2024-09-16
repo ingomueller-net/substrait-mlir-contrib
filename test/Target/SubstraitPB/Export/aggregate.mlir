@@ -15,9 +15,11 @@
 // CHECK-NEXT:      grouping_sets {{\[}}[0], [0, 1], [1], []]
 // CHECK-NEXT:      measures {
 // CHECK-NEXT:      ^[[BB1:.*]](%[[ARG1:.*]]: tuple<si32>):
-// CHECK-DAG:         %[[V3:.*]] = field_reference %[[ARG1]][0] : tuple<si32>
-// CHECK-DAG:         %[[V4:.*]] = literal 0 : si1
-// CHECK-NEXT:        yield %[[V3]], %[[V4]] : si32, si1
+// CHECK-DAG:         %[[V3:.*]] = field_reference %[[ARG1]][0]
+// CHECK-DAG:         %[[V4:.*]] = literal 0
+// CHECK-DAG:         %[[V5:.*]] = call @function(%[[V3]]) aggregate :
+// CHECK-DAG:         %[[V6:.*]] = call @function(%[[V4]]) aggregate :
+// CHECK-NEXT:        yield %[[V5]], %[[V6]] : si32, si1
 // CHECK-NEXT:      }
 // CHECK-NEXT:      yield %[[V1]]
 
@@ -37,8 +39,8 @@ substrait.plan version 0 : 42 : 1 {
       ^bb0(%arg : tuple<si32>):
         %2 = field_reference %arg[0] : tuple<si32>
         %3 = literal 0 : si1
-        %4 = call @function(%2) : (si32) -> si32
-        %5 = call @function(%3) : (si1) -> si1
+        %4 = call @function(%2) aggregate : (si32) -> si32
+        %5 = call @function(%3) aggregate unspecified : (si1) -> si1
         yield %4, %5 : si32, si1
       }
     yield %1 : tuple<si1, si1, si32, si1, si32>
@@ -57,7 +59,13 @@ substrait.plan version 0 : 42 : 1 {
 // CHECK:           }
 // CHECK-NEXT:      grouping_sets
 // CHECK-NEXT:      measures {
-// CHECK:           }
+// CHECK-NEXT:      ^[[BB1:.*]](%[[ARG1:.*]]: tuple<si32>):
+// CHECK-DAG:         %[[V3:.*]] = field_reference %[[ARG1]][0]
+// CHECK-DAG:         %[[V4:.*]] = literal 0
+// CHECK-DAG:         %[[V5:.*]] = call @function(%[[V3]]) aggregate all :
+// CHECK-DAG:         %[[V6:.*]] = call @function(%[[V4]]) aggregate distinct :
+// CHECK-NEXT:        yield %[[V5]], %[[V6]] : si32, si1
+// CHECK-NEXT:      }
 // CHECK-NEXT:      yield %[[V1]]
 
 substrait.plan version 0 : 42 : 1 {
@@ -70,8 +78,8 @@ substrait.plan version 0 : 42 : 1 {
       ^bb0(%arg : tuple<si32>):
         %2 = field_reference %arg[0] : tuple<si32>
         %3 = literal 0 : si1
-        %4 = call @function(%2) : (si32) -> si32
-        %5 = call @function(%3) : (si1) -> si1
+        %4 = call @function(%2) aggregate all : (si32) -> si32
+        %5 = call @function(%3) aggregate distinct : (si1) -> si1
         yield %4, %5 : si32, si1
       }
       grouping_sets [[0], [0, 1], [1], []]
@@ -159,7 +167,7 @@ substrait.plan version 0 : 42 : 1 {
       measures {
       ^bb0(%arg : tuple<si32>):
         %2 = field_reference %arg[0] : tuple<si32>
-        %3 = call @function(%2) : (si32) -> si32
+        %3 = call @function(%2) aggregate : (si32) -> si32
         yield %3 : si32
       }
     yield %1 : tuple<si32>
@@ -187,7 +195,7 @@ substrait.plan version 0 : 42 : 1 {
       measures {
       ^bb0(%arg : tuple<si32>):
         %2 = field_reference %arg[0] : tuple<si32>
-        %3 = call @function(%2) : (si32) -> si32
+        %3 = call @function(%2) aggregate : (si32) -> si32
         yield %3 : si32
       }
     yield %1 : tuple<si32>

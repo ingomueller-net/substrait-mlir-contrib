@@ -10,6 +10,7 @@
 #define SUBSTRAIT_DIALECT_SUBSTRAIT_IR_SUBSTRAITOPS
 
 include "substrait-mlir/Dialect/Substrait/IR/SubstraitDialect.td"
+include "substrait-mlir/Dialect/Substrait/IR/SubstraitEnums.td"
 include "substrait-mlir/Dialect/Substrait/IR/SubstraitInterfaces.td"
 include "substrait-mlir/Dialect/Substrait/IR/SubstraitTypes.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
@@ -327,11 +328,33 @@ def Substrait_CallOp : Substrait_ExpressionOp<"call", [
   // TODO(ingomueller): Add support for `enum` and `type` argument types.
   let arguments = (ins
     FlatSymbolRefAttr:$callee,
-    Variadic<Substrait_FieldType>:$args
+    Variadic<Substrait_FieldType>:$args,
+    OptionalAttr<AggregationInvocation>:$aggregation_invocation
   );
   let results = (outs Substrait_FieldType:$result);
   let assemblyFormat = [{
-    $callee `(` $args `)` attr-dict `:` `(` type($args) `)` `->` type($result)
+    $callee `(` $args `)`
+    (`aggregate` custom<AggregationInvocation>($aggregation_invocation)^)? ``
+    attr-dict `:` `(` type($args) `)` `->` type($result)
+  }];
+  let builders = [
+      OpBuilder<(ins "::mlir::Type":$result,
+                     "::mlir::FlatSymbolRefAttr":$callee,
+                     "::mlir::ValueRange":$args), [{
+        build($_builder, $_state, result, callee, args,
+              AggregationInvocationAttr());
+      }]>,
+      OpBuilder<(ins "::mlir::Type":$result, "::llvm::StringRef":$callee,
+                     "::mlir::ValueRange":$args), [{
+        build($_builder, $_state, result, callee, args,
+              AggregationInvocationAttr());
+      }]>
+    ];
+  let extraClassDeclaration = [{
+    // Helpers to distinguish function types.
+    bool isAggregate() { return getAggregationInvocation().has_value(); }
+    bool isScalar() { return !isAggregate() && !isWindow(); }
+    bool isWindow() { return false; } // TODO: change once supported.
   }];
 }
 

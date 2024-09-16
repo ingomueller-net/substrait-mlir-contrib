@@ -35,6 +35,12 @@ void SubstraitDialect::initialize() {
 }
 
 //===----------------------------------------------------------------------===//
+// Substrait enums
+//===----------------------------------------------------------------------===//
+
+#include "structured/Dialect/Substrait/IR/SubstraitEnums.cpp.inc"
+
+//===----------------------------------------------------------------------===//
 // Substrait interfaces
 //===----------------------------------------------------------------------===//
 
@@ -48,6 +54,12 @@ void SubstraitDialect::initialize() {
 namespace mlir {
 namespace substrait {
 
+static ParseResult
+parseAggregationInvocation(OpAsmParser &parser,
+                           AggregationInvocationAttr &aggregationInvocation);
+static void
+printAggregationInvocation(OpAsmPrinter &printer, CallOp op,
+                           AggregationInvocationAttr aggregationInvocation);
 static ParseResult parseAggregateRegions(OpAsmParser &parser,
                                          Region &measuresRegion,
                                          Region &groupingsRegion,
@@ -65,6 +77,45 @@ static void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
 
 namespace mlir {
 namespace substrait {
+
+ParseResult
+parseAggregationInvocation(OpAsmParser &parser,
+                           AggregationInvocationAttr &aggregationInvocation) {
+  // This is essentially copied from `FieldParser<AggregationInvocation>` but
+  // sets the default `unspecified` case if no invocation type is present.
+
+  MLIRContext *context = parser.getContext();
+  std::string keyword;
+  if (failed(parser.parseOptionalKeywordOrString(&keyword))) {
+    // No keyword parse --> use default value.
+    aggregationInvocation = AggregationInvocationAttr::get(
+        context, AggregationInvocation::unspecified);
+    return success();
+  }
+
+  // Symbolize the keyword.
+  if (std::optional<AggregationInvocation> attr =
+          symbolizeAggregationInvocation(keyword)) {
+    aggregationInvocation =
+        AggregationInvocationAttr::get(parser.getContext(), attr.value());
+    return success();
+  }
+
+  // Symbolization failed.
+  auto loc = parser.getCurrentLocation();
+  return parser.emitError(loc)
+         << "has invalid aggregate invocation type specification: " << keyword;
+}
+
+void printAggregationInvocation(
+    OpAsmPrinter &printer, CallOp op,
+    AggregationInvocationAttr aggregationInvocation) {
+  if (aggregationInvocation &&
+      aggregationInvocation.getValue() != AggregationInvocation::unspecified)
+    // The whitespace printed here compensates the trimming of whitespace in
+    // the declarative assembly format.
+    printer << aggregationInvocation.getValue() << " ";
+}
 
 ParseResult parseAggregateRegions(OpAsmParser &parser, Region &measuresRegion,
                                   Region &groupingsRegion,
@@ -251,8 +302,17 @@ LogicalResult AggregateOp::verifyRegions() {
     }
   }
 
-  // XXX: Verify that `measures` region yields only values produced by
-  // `AggregateFunction`s?
+  // Verify that `measures` region yields only values produced by
+  // `AggregateFunction`s.
+  if (!getMeasures().empty()) {
+    for (Value value : getMeasures().front().getTerminator()->getOperands()) {
+      auto callOp = llvm::dyn_cast_or_null<CallOp>(value.getDefiningOp());
+      if (!callOp || !callOp.isAggregate())
+        return emitOpError() << "yields value from 'measures' region that was "
+                                "not produced by an aggregate function: "
+                             << value;
+    }
+  }
 
   if (getGroupings().empty() && getMeasures().empty())
     return emitOpError()
