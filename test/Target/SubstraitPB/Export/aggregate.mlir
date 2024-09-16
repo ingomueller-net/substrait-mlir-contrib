@@ -179,3 +179,4 @@ substrait.plan version 0 : 42 : 1 {
 
 // -----
 
+// XXX: Add a test case for *no* grouping set
