@@ -37,14 +37,14 @@
 // CHECK-NEXT:         }
 // CHECK-NEXT:         grouping_expressions {
 // CHECK-NEXT:           literal {
-// CHECK-NEXT:             boolean: false
+// CHECK-NEXT:             boolean: true
 // CHECK-NEXT:           }
 // CHECK-NEXT:         }
 // CHECK-NEXT:       }
 // CHECK-NEXT:       groupings {
 // CHECK-NEXT:         grouping_expressions {
 // CHECK-NEXT:           literal {
-// CHECK-NEXT:             boolean: false
+// CHECK-NEXT:             boolean: true
 // CHECK-NEXT:           }
 // CHECK-NEXT:         }
 // CHECK-NEXT:       }
@@ -96,7 +96,8 @@ substrait.plan version 0 : 42 : 1 {
       groupings {
       ^bb0(%arg : tuple<si32>):
         %2 = literal 0 : si1
-        yield %2, %2 : si1, si1
+        %3 = literal -1 : si1
+        yield %2, %3 : si1, si1
       }
       grouping_sets [[0], [0, 1], [1], []]
       measures {
@@ -126,30 +127,26 @@ substrait.plan version 0 : 42 : 1 {
 substrait.plan version 0 : 42 : 1 {
   relation {
     %0 = named_table @t1 as ["a"] : tuple<si32>
-    %1 = aggregate %0 : tuple<si32> -> tuple<si1, si1, si32>
+    %1 = aggregate %0 : tuple<si32> -> tuple<si1>
       groupings {
       ^bb0(%arg : tuple<si32>):
         %2 = literal 0 : si1
-        yield %2, %2 : si1, si1
+        yield %2 : si1
       }
-      grouping_sets [[0], [0, 1], [1], []]
-    yield %1 : tuple<si1, si1, si32>
+      grouping_sets [[0]]
+    yield %1 : tuple<si1>
   }
 }
 
 // -----
 
-// Check op without `grouping` and empty grouping set and invocation modes.
-
+// Check op special invocation modes.
 
 // CHECK:      extension_uris {
 // CHECK:      relations {
 // CHECK-NEXT:   rel {
 // CHECK-NEXT:     aggregate {
-// CHECK:            input {
-// CHECK:            groupings {
-// CHECK-NEXT:       }
-// CHECK-NEXT:       measures {
+// CHECK:            measures {
 // CHECK-NEXT:        measure {
 // CHECK-NOT:           measure
 // CHECK:               invocation: AGGREGATION_INVOCATION_ALL
@@ -164,7 +161,6 @@ substrait.plan version 0 : 42 : 1 {
   relation {
     %0 = named_table @t1 as ["a"] : tuple<si32>
     %1 = aggregate %0 : tuple<si32> -> tuple<si32, si1>
-      grouping_sets [[]]
       measures {
       ^bb0(%arg : tuple<si32>):
         %2 = field_reference %arg[0] : tuple<si32>
@@ -179,4 +175,55 @@ substrait.plan version 0 : 42 : 1 {
 
 // -----
 
-// XXX: Add a test case for *no* grouping set
+// Check op without `grouping` and no grouping sets.
+
+// CHECK:      extension_uris {
+// CHECK:      relations {
+// CHECK-NEXT:   rel {
+// CHECK-NEXT:     aggregate {
+// CHECK-NOT:        groupings
+// CHECK:      version
+
+substrait.plan version 0 : 42 : 1 {
+  extension_uri @extension at "http://some.url/with/extensions.yml"
+  extension_function @function at @extension["somefunc"]
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    %1 = aggregate %0 : tuple<si32> -> tuple<si32>
+      grouping_sets []
+      measures {
+      ^bb0(%arg : tuple<si32>):
+        %2 = field_reference %arg[0] : tuple<si32>
+        %4 = call @function(%2) aggregate : (si32) -> si32
+        yield %4 : si32
+      }
+    yield %1 : tuple<si32>
+  }
+}
+
+// -----
+
+// Check op without `grouping` and (implicit) empty grouping set.
+
+// CHECK:      extension_uris {
+// CHECK:      relations {
+// CHECK-NEXT:   rel {
+// CHECK-NEXT:     aggregate {
+// CHECK:          groupings {
+// CHECK:      version
+
+substrait.plan version 0 : 42 : 1 {
+  extension_uri @extension at "http://some.url/with/extensions.yml"
+  extension_function @function at @extension["somefunc"]
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    %1 = aggregate %0 : tuple<si32> -> tuple<si32>
+      measures {
+      ^bb0(%arg : tuple<si32>):
+        %2 = field_reference %arg[0] : tuple<si32>
+        %4 = call @function(%2) aggregate : (si32) -> si32
+        yield %4 : si32
+      }
+    yield %1 : tuple<si32>
+  }
+}

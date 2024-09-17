@@ -157,10 +157,6 @@ ParseResult parseAggregateRegions(OpAsmParser &parser, Region &measuresRegion,
     }
   }
 
-  // XXX: The protobuf format distinguishes between no grouping set and an empty
-  // grouping set, so we need to change this in order to be able to express
-  // both.
-
   // Create default value of `grouping_sets` attr if not provided.
   if (!hasGroupingSets) {
     // If there is no `groupings` region, create only the empty grouping set.

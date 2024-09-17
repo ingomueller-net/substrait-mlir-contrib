@@ -293,10 +293,15 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
       groupingSetsAttrs.push_back(groupingSet);
     }
 
-    // Assemble `YieldOp` of groupings region.
-    OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToEnd(groupingsBlock);
-    builder.create<YieldOp>(loc, groupingExprValues);
+    // Assemble `YieldOp` of groupings region if there are grouping expressions.
+    if (!groupingExprOps.empty()) {
+      OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToEnd(groupingsBlock);
+      builder.create<YieldOp>(loc, groupingExprValues);
+    } else {
+      // If there aren't any, we should clear the `groupings` region.
+      groupingsRegion->getBlocks().clear();
+    }
   }
 
   // Create attribute for grouping sets.

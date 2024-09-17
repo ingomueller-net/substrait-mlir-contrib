@@ -382,6 +382,9 @@ def I64ArrayArrayAttr : TypedArrayAttrBase<
     I64ArrayAttr, "64-bit integer array array attribute"
   >;
 
+def NonEmptyI64ArrayArrayAttr :
+  ConfinedAttr<I64ArrayArrayAttr, [ArrayMinCount<1>]>;
+
 def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     DeclareOpInterfaceMethods<OpAsmOpInterface, ["getDefaultDialect"]>,
     SingleBlockImplicitTerminator<"::mlir::substrait::YieldOp">,
@@ -396,13 +399,15 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
     are currently not supported. The `groupings` field is represented as a
     region yielding the the unique (deduplicated) grouping expressions and an
     array of array of references to these expressions representing the grouping
-    sets. An empty array of grouping sets and the array with one empty grouping
-    set are both representable, as they correspond to different protobuf
-    representations, even though their semantic is equivalent. The op can only
-    be exported to the protobuf format if the expressions yielded by the
-    `groupings` region are all distinct after CSE. The assembly format omits an
-    empty region of groupings, an empty region of measures, and the grouping
-    sets attribute with an empty grouping set.
+    sets. An empty array of grouping sets corresponds to *no* `groupings`
+    messages; an array with an empty grouping set corresponds to an *empty*
+    `groupings` messages. These two protobuf representations are different even
+    though their semantic is equivalent. The op can only be exported to the
+    protobuf format if the expressions yielded by the `groupings` region are all
+    distinct after CSE. The assembly format omits an empty region of groupings,
+    an empty region of measures, and the grouping sets attribute with one
+    grouping set that consists of all values yielded from `groupings` (or the
+    empty grouping set if that region is empty).
 
     Example:
 
