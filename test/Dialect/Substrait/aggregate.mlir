@@ -121,7 +121,7 @@ substrait.plan version 0 : 42 : 1 {
 
 // -----
 
-// Check op with single grouping_set.
+// Check op with explicit single grouping_set.
 
 // CHECK-LABEL: substrait.plan
 // CHECK:         relation
@@ -141,6 +141,31 @@ substrait.plan version 0 : 42 : 1 {
         yield %2, %2 : si1, si1
       }
       grouping_sets [[0, 1]]
+    yield %1 : tuple<si1, si1>
+  }
+}
+
+// -----
+
+// Check op with implicit single grouping_set.
+
+// CHECK-LABEL: substrait.plan
+// CHECK:         relation
+// CHECK:         %[[V0:.*]] = named_table
+// CHECK-NEXT:    %[[V1:.*]] = aggregate %[[V0]]
+// CHECK-NEXT:      groupings {
+// CHECK:           }
+// CHECK-NEXT:      yield %[[V1]]
+
+substrait.plan version 0 : 42 : 1 {
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    %1 = aggregate %0 : tuple<si32> -> tuple<si1, si1>
+      groupings {
+      ^bb0(%arg : tuple<si32>):
+        %2 = literal 0 : si1
+        yield %2, %2 : si1, si1
+      }
     yield %1 : tuple<si1, si1>
   }
 }
