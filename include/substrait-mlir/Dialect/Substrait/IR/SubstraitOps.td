@@ -304,9 +304,9 @@ def Substrait_CallOp : Substrait_ExpressionOp<"call", [
   ]> {
   let summary = "Function call expression";
   let description = [{
-    Represents a `ScalarFunction` message (or, in the future, other `*Function`
-    messages) together with all messages it contains and the `Expression`
-    message it is contained in.
+    Represents a `ScalarFunction` or `AggregateFunction` message (or, in the
+    future, a `WindowFunction` message) together with all messages it contains
+    and, where applicable, the `Expression` message it is contained in.
 
     Currently, the specification of the function, which is in an external YAML
     file, is not taken into account, for example, to verify whether a matching
