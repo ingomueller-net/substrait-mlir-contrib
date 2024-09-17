@@ -308,7 +308,7 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
   // XXX: Move this to custom builder?
   SmallVector<Region *> regions = {measuresRegion.get(), groupingsRegion.get()};
   AggregateOp::Properties properties;
-  properties.groupingSets = groupingSets;
+  properties.grouping_sets = groupingSets;
   SmallVector<mlir::Type> returnTypes;
   if (failed(AggregateOp::inferReturnTypes(context, loc, inputVal, {},
                                            OpaqueProperties(&properties),

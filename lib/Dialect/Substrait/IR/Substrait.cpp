@@ -165,7 +165,7 @@ ParseResult parseAggregateRegions(OpAsmParser &parser, Region &measuresRegion,
   if (!hasGroupingSets) {
     // If there is no `groupings` region, create only the empty grouping set.
     if (!hasGroupings)
-      groupingSetsAttr = ArrayAttr::get(context, {});
+      groupingSetsAttr = ArrayAttr::get(context, ArrayAttr::get(context, {}));
     // Otherwise, create the grouping set with all grouping columns.
     else if (!groupingsRegion.empty()) {
       auto yieldOp =
@@ -198,7 +198,7 @@ void printAggregateRegions(OpAsmPrinter &printer, AggregateOp op,
   }
 
   // `grouping_sets` attribute.
-  if (groupingSetsAttr.size() > 1) {
+  if (groupingSetsAttr.size() != 1) {
     // Note: A single grouping set is always of the form `seq(0, size)`.
     printer.printNewline();
     printer.printKeywordOrString("grouping_sets");
@@ -240,7 +240,7 @@ LogicalResult AggregateOp::inferReturnTypes(
 
   // If there is more than one `grouping_set`, then we also have an additional
   // `si32` column for the grouping set ID.
-  if (typedProperties->groupingSets.size() > 1) {
+  if (typedProperties->grouping_sets.size() > 1) {
     auto si32 = IntegerType::get(context, /*width=*/32, IntegerType::Signed);
     fieldTypes.push_back(si32);
   }

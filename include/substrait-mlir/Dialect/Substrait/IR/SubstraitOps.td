@@ -389,21 +389,43 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
   ]> {
   let summary = "Aggregate operation";
   let description = [{
-    Represents a `AggregateRel ` message together with the `RelCommon` and the
-    messages it contains.
+    Represents an `AggregateRel ` message together with the `RelCommon` and the
+    messages it contains. The `measures` field is represented as a region where
+    the yielded values correspond to the `AggregateFunction`s (and thus have
+    to be produced by a `CallOp` representing an aggregate function). Filters
+    are currently not supported. The `groupings` field is represented as a
+    region yielding the the unique (deduplicated) grouping expressions and an
+    array of array of references to these expressions representing the grouping
+    sets. An empty array of grouping sets and the array with one empty grouping
+    set are both representable, as they correspond to different protobuf
+    representations, even though their semantic is equivalent. The op can only
+    be exported to the protobuf format if the expressions yielded by the
+    `groupings` region are all distinct after CSE. The assembly format omits an
+    empty region of groupings, an empty region of measures, and the grouping
+    sets attribute with an empty grouping set.
 
     Example:
 
     ```mlir
     %0 = ...
-    %1 = aggregate by {
-      // XXX
-    }
+    %1 = aggregate %0 : tuple<si32> -> tuple<si32, si32>
+      groupings {
+      ^bb0(%arg : tuple<si32>):
+        %2 = field_reference %arg[0] : tuple<si32>
+        yield %2 : si32
+      }
+      grouping_sets [[0]]
+      measures {
+      ^bb0(%arg : tuple<si32>):
+        %2 = field_reference %arg[0] : tuple<si32>
+        %3 = call @function(%2) aggregate : (si32) -> si32
+        yield %3 : si32
+      }
     ```
   }];
   let arguments = (ins
     Substrait_Relation:$input,
-    I64ArrayArrayAttr:$groupingSets
+    I64ArrayArrayAttr:$grouping_sets
   );
   let results = (outs Substrait_Relation:$result);
   let regions = (region
@@ -412,7 +434,7 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
   );
   let assemblyFormat = [{
     $input attr-dict `:` type($input) `->` type($result)
-    custom<AggregateRegions>($measures, $groupings, $groupingSets)
+    custom<AggregateRegions>($measures, $groupings, $grouping_sets)
   }];
   let hasRegionVerifier = 1;
   let extraClassDefinition = [{
