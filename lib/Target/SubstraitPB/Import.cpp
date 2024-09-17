@@ -389,10 +389,12 @@ importExpression(ImplicitLocOpBuilder builder, const Expression &message) {
     return importFieldReference(builder, message.selection());
   case Expression::kScalarFunction:
     return importScalarFunction(builder, message.scalar_function());
+  case Expression::REX_TYPE_NOT_SET:
+    return emitError(loc) << Twine("expression type not set");
   default: {
     const pb::FieldDescriptor *desc =
         Expression::GetDescriptor()->FindFieldByNumber(rex_type);
-    return emitError(loc) << Twine("unsupported Expression type: ") +
+    return emitError(loc) << Twine("unsupported expression type: ") +
                                  desc->name();
   }
   }
