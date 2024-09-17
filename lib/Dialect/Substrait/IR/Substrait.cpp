@@ -249,16 +249,25 @@ LogicalResult AggregateOp::inferReturnTypes(
 }
 
 LogicalResult AggregateOp::verifyRegions() {
-  // Verify that the regions have the input tuple as argument.
+  // Verify properties that need to hold for both regions.
   auto inputTupleType = getInput().getType();
   for (auto [idx, region] : llvm::enumerate(getRegions())) {
-    if (region->empty()) // `measures` region is allowed to be empty.
+    if (region->empty()) // Regions is allowed to be empty.
       continue;
+
+    // Verify that the regions have the input tuple as argument.
     if (region->getArgumentTypes() != TypeRange{inputTupleType})
       return emitOpError() << "has region #" << idx
                            << " with invalid argument types (expected: "
                            << inputTupleType
                            << ", got: " << region->getArgumentTypes() << ")";
+
+    // Verify that at least one value is yielded.
+    auto yieldOp = llvm::cast<YieldOp>(region->front().getTerminator());
+    if (yieldOp->getNumOperands() == 0)
+      return emitOpError()
+             << "has region #" << idx
+             << " that yields no values (use empty region instead)";
   }
 
   // Verify that the grouping sets refer to values yielded from `groupings`,

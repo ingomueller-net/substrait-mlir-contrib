@@ -144,3 +144,33 @@ substrait.plan version 0 : 42 : 1 {
     yield %1 : tuple<si32>
   }
 }
+
+// -----
+
+substrait.plan version 0 : 42 : 1 {
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    // expected-error@+1 {{'substrait.aggregate' op has region #0 that yields no values (use empty region instead)}}
+    %1 = aggregate %0 : tuple<si32> -> tuple<>
+      measures {
+      ^bb0(%arg : tuple<si32>):
+        yield
+      }
+    yield %1 : tuple<>
+  }
+}
+
+// -----
+
+substrait.plan version 0 : 42 : 1 {
+  relation {
+    %0 = named_table @t1 as ["a"] : tuple<si32>
+    // expected-error@+1 {{'substrait.aggregate' op has region #1 that yields no values (use empty region instead)}}
+    %1 = aggregate %0 : tuple<si32> -> tuple<>
+      groupings {
+      ^bb0(%arg : tuple<si32>):
+        yield
+      }
+    yield %1 : tuple<>
+  }
+}

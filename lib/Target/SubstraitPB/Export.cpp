@@ -175,6 +175,7 @@ SubstraitExporter::exportOperation(AggregateOp op) {
 
   // Build `groupings` field.
   {
+    // Make sure grouping expressions are distinct after CSE.
     if (!op.getGroupings().empty()) {
       // Set up rewriter to make temporary copy.
       IRRewriter rewriter(op.getContext());
@@ -194,9 +195,9 @@ SubstraitExporter::exportOperation(AggregateOp op) {
         mlir::eliminateCommonSubExpressions(rewriter, domInfo, opCopy.get());
       }
 
-      // Make sure that all yielded values are different. If the are not, then
-      // some of them would result in equivalent grouping expressions, which
-      // would change the semantics of the op.
+      // Make sure that all yielded values are different. If they are not, then
+      // some of them would result in equivalent grouping expressions in the
+      // protobuf format, which would change the semantics of the op.
       auto yieldOp = llvm::cast<YieldOp>(
           aggrOpCopy.getGroupings().front().getTerminator());
       ValueRange yieldedValues = yieldOp->getOperands();
@@ -210,8 +211,6 @@ SubstraitExporter::exportOperation(AggregateOp op) {
 
     // Export values yielded from `groupings` region as `Expression` messages.
     SmallVector<std::unique_ptr<Expression>> columnExpressions;
-    // XXX: We have to fail export if the expressions aren't all unique (after
-    // CSE).
     {
       // Get grouping expressions if any.
       ArrayRef<Value> emptyValueRange;
@@ -253,17 +252,14 @@ SubstraitExporter::exportOperation(AggregateOp op) {
     }
   }
 
+  // Export measures if any.
   if (!op.getMeasures().empty()) {
     auto yieldOp =
         llvm::cast<YieldOp>(op.getMeasures().front().getTerminator());
     for (auto [measureIdx, measureVal] :
          llvm::enumerate(yieldOp->getOperands())) {
       // Build `Expression` message for operand.
-      auto callOp =
-          llvm::dyn_cast_if_present<CallOp>(measureVal.getDefiningOp());
-      if (!callOp)
-        return op->emitOpError() << "yields measure column " << measureIdx
-                                 << " that was not produced by 'call' op";
+      auto callOp = llvm::cast<CallOp>(measureVal.getDefiningOp());
       assert(callOp.isAggregate() && "expected aggregate function");
 
       FailureOr<std::unique_ptr<AggregateFunction>> aggregateFunction =
