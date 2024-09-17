@@ -9,7 +9,10 @@
 #include "substrait-mlir/Target/SubstraitPB/Export.h"
 #include "ProtobufUtils.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Dominance.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LogicalResult.h"
+#include "mlir/Transforms/CSE.h"
 #include "substrait-mlir/Dialect/Substrait/IR/Substrait.h"
 #include "substrait-mlir/Target/SubstraitPB/Options.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -172,6 +175,39 @@ SubstraitExporter::exportOperation(AggregateOp op) {
 
   // Build `groupings` field.
   {
+    if (!op.getGroupings().empty()) {
+      // Set up rewriter to make temporary copy.
+      IRRewriter rewriter(op.getContext());
+      IRRewriter::InsertionGuard guard(rewriter);
+      rewriter.setInsertionPointAfter(op);
+
+      // Create a temporary copy that gets *erased* by the rewriter when it goes
+      // out of scope.
+      auto eraseOp = [&](Operation *op) { rewriter.eraseOp(op); };
+      std::unique_ptr<Operation, decltype(eraseOp)> opCopy(rewriter.clone(*op),
+                                                           eraseOp);
+      AggregateOp aggrOpCopy = mlir::cast<AggregateOp>(opCopy.get());
+
+      // Run CSE on the copy.
+      {
+        DominanceInfo domInfo;
+        mlir::eliminateCommonSubExpressions(rewriter, domInfo, opCopy.get());
+      }
+
+      // Make sure that all yielded values are different. If the are not, then
+      // some of them would result in equivalent grouping expressions, which
+      // would change the semantics of the op.
+      auto yieldOp = llvm::cast<YieldOp>(
+          aggrOpCopy.getGroupings().front().getTerminator());
+      ValueRange yieldedValues = yieldOp->getOperands();
+      DenseSet<Value> distinctYieldedValues;
+      distinctYieldedValues.insert(yieldedValues.begin(), yieldedValues.end());
+      if (yieldedValues.size() != distinctYieldedValues.size())
+        return op.emitOpError()
+               << "cannot be exported: values yielded from 'groupings' region "
+                  "are not all distinct after CSE";
+    }
+
     // Export values yielded from `groupings` region as `Expression` messages.
     SmallVector<std::unique_ptr<Expression>> columnExpressions;
     // XXX: We have to fail export if the expressions aren't all unique (after
