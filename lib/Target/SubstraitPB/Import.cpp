@@ -71,6 +71,7 @@ struct SimpleOperationInfo : public llvm::DenseMapInfo<Operation *> {
   static FailureOr<OP_TYPE> import##MESSAGE_TYPE(ImplicitLocOpBuilder builder, \
                                                  const ARG_TYPE &message);
 
+DECLARE_IMPORT_FUNC(AggregateFunction, AggregateFunction, CallOp)
 DECLARE_IMPORT_FUNC(AggregateRel, Rel, AggregateOp)
 DECLARE_IMPORT_FUNC(CrossRel, Rel, CrossOp)
 DECLARE_IMPORT_FUNC(SetRel, Rel, UnionDistinctOp)
@@ -145,6 +146,61 @@ static mlir::FailureOr<mlir::Type> importType(MLIRContext *context,
   }
   }
 }
+static mlir::FailureOr<CallOp>
+importAggregateFunction(ImplicitLocOpBuilder builder,
+                        const AggregateFunction &aggrFunc) {
+  MLIRContext *context = builder.getContext();
+  Location loc = UnknownLoc::get(context);
+  // XXX: Factor out common code with `ScalarFunction`.
+
+  // Import `output_type`.
+  const proto::Type &outputType = aggrFunc.output_type();
+  FailureOr<mlir::Type> mlirOutputType = importType(context, outputType);
+  if (failed(mlirOutputType))
+    return failure();
+
+  // Import `arguments`.
+  SmallVector<Value> operands;
+  for (const FunctionArgument &arg : aggrFunc.arguments()) {
+    // Error out on unsupported cases.
+    // TODO(ingomueller): Support other function argument types.
+    if (!arg.has_value()) {
+      const pb::FieldDescriptor *desc =
+          FunctionArgument::GetDescriptor()->FindFieldByNumber(
+              arg.arg_type_case());
+      return emitError(loc) << Twine("unsupported arg type: ") + desc->name();
+    }
+
+    // Handle `value` case.
+    const Expression &value = arg.value();
+    FailureOr<ExpressionOpInterface> expression =
+        importExpression(builder, value);
+    if (failed(expression))
+      return failure();
+    operands.push_back((*expression)->getResult(0));
+  }
+
+  // Import `function_reference` field.
+  int32_t anchor = aggrFunc.function_reference();
+  std::string calleeSymName = buildFuncSymName(anchor);
+
+  // Import `function_reference` field.
+  AggregateFunction::AggregationInvocation invocation = aggrFunc.invocation();
+  std::optional<AggregationInvocation> invocationEnum =
+      symbolizeAggregationInvocation(invocation);
+  if (!invocationEnum.has_value())
+    return emitError(loc)
+           << "unsupported enum value for aggregate function invocation";
+  auto invocationAttr =
+      AggregationInvocationAttr::get(context, invocationEnum.value());
+
+  // Create op.
+  auto callOp = builder.create<CallOp>(mlirOutputType.value(), calleeSymName,
+                                       operands, invocationAttr);
+  assert(callOp.isAggregate() && "expected to build aggregate function");
+
+  return callOp;
+}
 
 static mlir::FailureOr<AggregateOp>
 importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
@@ -176,56 +232,12 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
     for (const Measure &measure : aggregateRel.measures()) {
       const AggregateFunction &aggrFunc = measure.measure();
 
-      // XXX: Factor out common code with `ScalarFunction`.
-      // Import `output_type`.
-      const proto::Type &outputType = aggrFunc.output_type();
-      FailureOr<mlir::Type> mlirOutputType = importType(context, outputType);
-      if (failed(mlirOutputType))
+      // Import measure as `CallOp`.
+      FailureOr<CallOp> callOp = importAggregateFunction(builder, aggrFunc);
+      if (failed(callOp))
         return failure();
 
-      // Import `arguments`.
-      SmallVector<Value> operands;
-      for (const FunctionArgument &arg : aggrFunc.arguments()) {
-        // Error out on unsupported cases.
-        // TODO(ingomueller): Support other function argument types.
-        if (!arg.has_value()) {
-          const pb::FieldDescriptor *desc =
-              FunctionArgument::GetDescriptor()->FindFieldByNumber(
-                  arg.arg_type_case());
-          return emitError(loc)
-                 << Twine("unsupported arg type: ") + desc->name();
-        }
-
-        // Handle `value` case.
-        const Expression &value = arg.value();
-        FailureOr<ExpressionOpInterface> expression =
-            importExpression(builder, value);
-        if (failed(expression))
-          return failure();
-        operands.push_back((*expression)->getResult(0));
-      }
-
-      // Import `function_reference` field.
-      int32_t anchor = aggrFunc.function_reference();
-      std::string calleeSymName = buildFuncSymName(anchor);
-
-      // Import `function_reference` field.
-      AggregateFunction::AggregationInvocation invocation =
-          aggrFunc.invocation();
-      std::optional<AggregationInvocation> invocationEnum =
-          symbolizeAggregationInvocation(invocation);
-      if (!invocationEnum.has_value())
-        return emitError(loc)
-               << "unsupported enum value for aggregate function invocation";
-      auto invocationAttr =
-          AggregationInvocationAttr::get(context, invocationEnum.value());
-
-      // Create op.
-      auto callOp = builder.create<CallOp>(
-          mlirOutputType.value(), calleeSymName, operands, invocationAttr);
-      assert(callOp.isAggregate() && "expected to build aggregate function");
-
-      measuresValues.push_back(callOp.getResult());
+      measuresValues.push_back(callOp.value().getResult());
     }
 
     builder.create<YieldOp>(measuresValues);

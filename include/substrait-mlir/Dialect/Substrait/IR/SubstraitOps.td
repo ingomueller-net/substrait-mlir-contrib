@@ -334,7 +334,7 @@ def Substrait_CallOp : Substrait_ExpressionOp<"call", [
   let results = (outs Substrait_FieldType:$result);
   let assemblyFormat = [{
     $callee `(` $args `)`
-    (`aggregate` custom<AggregationInvocation>($aggregation_invocation)^)? ``
+    (`aggregate` `` custom<AggregationInvocation>($aggregation_invocation)^)?
     attr-dict `:` `(` type($args) `)` `->` type($result)
   }];
   let builders = [

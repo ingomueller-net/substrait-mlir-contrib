@@ -114,7 +114,7 @@ void printAggregationInvocation(
       aggregationInvocation.getValue() != AggregationInvocation::unspecified)
     // The whitespace printed here compensates the trimming of whitespace in
     // the declarative assembly format.
-    printer << aggregationInvocation.getValue() << " ";
+    printer << " " << aggregationInvocation.getValue();
 }
 
 ParseResult parseAggregateRegions(OpAsmParser &parser, Region &measuresRegion,
