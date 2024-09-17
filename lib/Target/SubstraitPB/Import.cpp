@@ -88,6 +88,10 @@ DECLARE_IMPORT_FUNC(ReadRel, Rel, RelOpInterface)
 DECLARE_IMPORT_FUNC(Rel, Rel, RelOpInterface)
 DECLARE_IMPORT_FUNC(ScalarFunction, Expression::ScalarFunction, CallOp)
 
+template <typename MessageType>
+static FailureOr<CallOp> importFunctionCommon(ImplicitLocOpBuilder builder,
+                                              const MessageType &message);
+
 // Helpers to build symbol names from anchors deterministically. This allows
 // to reate symbol references from anchors without look-up structure. Also,
 // the format is exploited by the export logic to recover the original anchor
@@ -146,59 +150,28 @@ static mlir::FailureOr<mlir::Type> importType(MLIRContext *context,
   }
   }
 }
-static mlir::FailureOr<CallOp>
+
+mlir::FailureOr<CallOp>
 importAggregateFunction(ImplicitLocOpBuilder builder,
-                        const AggregateFunction &aggrFunc) {
+                        const AggregateFunction &message) {
   MLIRContext *context = builder.getContext();
   Location loc = UnknownLoc::get(context);
-  // XXX: Factor out common code with `ScalarFunction`.
 
-  // Import `output_type`.
-  const proto::Type &outputType = aggrFunc.output_type();
-  FailureOr<mlir::Type> mlirOutputType = importType(context, outputType);
-  if (failed(mlirOutputType))
+  FailureOr<CallOp> maybeCallOp = importFunctionCommon(builder, message);
+  if (failed(maybeCallOp))
     return failure();
+  CallOp callOp = maybeCallOp.value();
 
-  // Import `arguments`.
-  SmallVector<Value> operands;
-  for (const FunctionArgument &arg : aggrFunc.arguments()) {
-    // Error out on unsupported cases.
-    // TODO(ingomueller): Support other function argument types.
-    if (!arg.has_value()) {
-      const pb::FieldDescriptor *desc =
-          FunctionArgument::GetDescriptor()->FindFieldByNumber(
-              arg.arg_type_case());
-      return emitError(loc) << Twine("unsupported arg type: ") + desc->name();
-    }
-
-    // Handle `value` case.
-    const Expression &value = arg.value();
-    FailureOr<ExpressionOpInterface> expression =
-        importExpression(builder, value);
-    if (failed(expression))
-      return failure();
-    operands.push_back((*expression)->getResult(0));
-  }
-
-  // Import `function_reference` field.
-  int32_t anchor = aggrFunc.function_reference();
-  std::string calleeSymName = buildFuncSymName(anchor);
-
-  // Import `function_reference` field.
-  AggregateFunction::AggregationInvocation invocation = aggrFunc.invocation();
+  // Import `invocation` field.
+  AggregateFunction::AggregationInvocation invocation = message.invocation();
   std::optional<AggregationInvocation> invocationEnum =
       symbolizeAggregationInvocation(invocation);
   if (!invocationEnum.has_value())
     return emitError(loc)
            << "unsupported enum value for aggregate function invocation";
-  auto invocationAttr =
-      AggregationInvocationAttr::get(context, invocationEnum.value());
+  callOp.setAggregationInvocation(invocationEnum);
 
-  // Create op.
-  auto callOp = builder.create<CallOp>(mlirOutputType.value(), calleeSymName,
-                                       operands, invocationAttr);
   assert(callOp.isAggregate() && "expected to build aggregate function");
-
   return callOp;
 }
 
@@ -840,6 +813,15 @@ static mlir::FailureOr<RelOpInterface> importRel(ImplicitLocOpBuilder builder,
 static mlir::FailureOr<CallOp>
 importScalarFunction(ImplicitLocOpBuilder builder,
                      const Expression::ScalarFunction &message) {
+  FailureOr<CallOp> callOp = importFunctionCommon(builder, message);
+  assert((failed(callOp) || callOp->isScalar()) &&
+         "expected to build scalar function");
+  return callOp;
+}
+
+template <typename MessageType>
+FailureOr<CallOp> importFunctionCommon(ImplicitLocOpBuilder builder,
+                                       const MessageType &message) {
   MLIRContext *context = builder.getContext();
   Location loc = UnknownLoc::get(context);
 
@@ -877,7 +859,6 @@ importScalarFunction(ImplicitLocOpBuilder builder,
   // Create op.
   auto callOp =
       builder.create<CallOp>(mlirOutputType.value(), calleeSymName, operands);
-  assert(callOp.isScalar() && "expected to build scalar function");
 
   return {callOp};
 }
