@@ -16,14 +16,8 @@
 #include "mlir/InitAllExtensions.h"
 #include "mlir/InitAllPasses.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
-#include "structured/Conversion/Passes.h"
-#include "structured/Dialect/Iterators/IR/Iterators.h"
-#include "structured/Dialect/Iterators/Transforms/Passes.h"
 #include "structured/Dialect/Substrait/IR/Substrait.h"
 #include "structured/Dialect/Substrait/Transforms/Passes.h"
-#include "structured/Dialect/Tabular/IR/Tabular.h"
-#include "structured/Dialect/Tuple/IR/Tuple.h"
-#include "structured/Dialect/Tuple/Transforms/Passes.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/InitLLVM.h"
@@ -33,16 +27,6 @@
 
 using namespace mlir;
 using namespace mlir::substrait;
-
-static void registerIteratorDialects(DialectRegistry &registry) {
-  registry.insert<
-      // clang-format off
-      mlir::iterators::IteratorsDialect,
-      mlir::tabular::TabularDialect,
-      mlir::tuple::TupleDialect
-      // clang-format on
-      >();
-}
 
 static void registerSubstraitDialects(DialectRegistry &registry) {
   registry.insert<mlir::substrait::SubstraitDialect>();
@@ -56,15 +40,11 @@ int main(int argc, char **argv) {
 #endif
 
   registerAllPasses();
-  registerStructuredConversionPasses();
-  registerIteratorsPasses();
   registerSubstraitPasses();
-  registerTuplePasses();
 
   DialectRegistry registry;
   registerAllDialects(registry);
   registerAllExtensions(registry);
-  registerIteratorDialects(registry);
   registerSubstraitDialects(registry);
 
   return failed(

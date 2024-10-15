@@ -14,37 +14,10 @@ declare_mlir_python_sources(StructuredPythonSources.Dialects
 declare_mlir_dialect_python_bindings(
   ADD_TO_PARENT StructuredPythonSources.Dialects
   ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir_structured"
-  TD_FILE dialects/IteratorsOps.td
-  SOURCES
-  dialects/iterators.py
-  DIALECT_NAME iterators
-)
-
-declare_mlir_dialect_python_bindings(
-  ADD_TO_PARENT StructuredPythonSources.Dialects
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir_structured"
   TD_FILE dialects/SubstraitOps.td
   SOURCES
   dialects/substrait.py
   DIALECT_NAME substrait
-)
-
-declare_mlir_dialect_python_bindings(
-  ADD_TO_PARENT StructuredPythonSources.Dialects
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir_structured"
-  TD_FILE dialects/TabularOps.td
-  SOURCES
-  dialects/tabular.py
-  DIALECT_NAME tabular
-)
-
-declare_mlir_dialect_python_bindings(
-  ADD_TO_PARENT StructuredPythonSources.Dialects
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir_structured"
-  TD_FILE dialects/TupleOps.td
-  SOURCES
-  dialects/tuple.py
-  DIALECT_NAME tuple
 )
 
 declare_mlir_python_extension(StructuredPythonSources.DialectExtension
@@ -54,22 +27,6 @@ declare_mlir_python_extension(StructuredPythonSources.DialectExtension
   StructuredDialects.cpp
   EMBED_CAPI_LINK_LIBS
   StructuredCAPI
-)
-
-declare_mlir_python_extension(StructuredPythonSources.PassesExtension
-  MODULE_NAME _mlirStructuredPasses
-  ADD_TO_PARENT StructuredPythonSources
-  SOURCES
-  StructuredPasses.cpp
-  EMBED_CAPI_LINK_LIBS
-  StructuredCAPI
-)
-
-declare_mlir_python_sources(StructuredPythonSources.ExecutionEngine
-  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mlir_structured"
-  ADD_TO_PARENT StructuredPythonSources
-  SOURCES_GLOB
-    runtime/*.py
 )
 
 # ###############################################################################

@@ -69,7 +69,6 @@ add_subdirectory(third_party)
 ################################################################################
 add_custom_target(structured-all)
 
-add_subdirectory(examples)
 add_subdirectory(lib)
 add_subdirectory(include)
 add_subdirectory(python)

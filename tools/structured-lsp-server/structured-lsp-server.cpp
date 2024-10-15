@@ -20,27 +20,11 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Tools/mlir-lsp-server/MlirLspServerMain.h"
-#include "structured/Conversion/Passes.h"
-#include "structured/Dialect/Iterators/IR/Iterators.h"
-#include "structured/Dialect/Iterators/Transforms/Passes.h"
 #include "structured/Dialect/Substrait/IR/Substrait.h"
-#include "structured/Dialect/Tabular/IR/Tabular.h"
-#include "structured/Dialect/Tuple/IR/Tuple.h"
-#include "structured/Dialect/Tuple/Transforms/Passes.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Signals.h"
 
 using namespace mlir;
-
-static void registerIteratorDialects(DialectRegistry &registry) {
-  registry.insert<
-      // clang-format off
-      mlir::iterators::IteratorsDialect,
-      mlir::tabular::TabularDialect,
-      mlir::tuple::TupleDialect
-      // clang-format on
-      >();
-}
 
 static void registerSubstraitDialects(DialectRegistry &registry) {
   registry.insert<mlir::substrait::SubstraitDialect>();
@@ -54,14 +38,10 @@ int main(int argc, char **argv) {
 #endif
 
   registerAllPasses();
-  registerStructuredConversionPasses();
-  registerIteratorsPasses();
-  registerTuplePasses();
 
   DialectRegistry registry;
   registerAllDialects(registry);
   registerAllExtensions(registry);
-  registerIteratorDialects(registry);
   registerSubstraitDialects(registry);
 
   return mlir::failed(mlir::MlirLspServerMain(argc, argv, registry));
