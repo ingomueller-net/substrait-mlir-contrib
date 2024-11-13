@@ -38,7 +38,7 @@ void SubstraitDialect::initialize() {
 // Substrait enums
 //===----------------------------------------------------------------------===//
 
-#include "structured/Dialect/Substrait/IR/SubstraitEnums.cpp.inc"
+#include "substrait-mlir/Dialect/Substrait/IR/SubstraitEnums.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Substrait interfaces

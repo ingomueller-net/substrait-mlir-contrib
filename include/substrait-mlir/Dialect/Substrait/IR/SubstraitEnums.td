@@ -1,4 +1,4 @@
-//===-- SubstraitInterfaces.td - Substrait enums ------*- tablegen -*-===//
+//===-- SubstraitEnums.td - Substrait enums definitions ----*- tablegen -*-===//
 //
 // Licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
