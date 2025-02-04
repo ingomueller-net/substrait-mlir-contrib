@@ -59,7 +59,8 @@ createDeduplicatingEmit(Value input, SmallVector<int64_t> &reverseMapping,
   // `emit` op with no duplicates. In that case, the returned value is just the
   // `input` and the reverse mapping is just the identity.
   auto handleNoDuplicates = [&]() {
-    int64_t numInputFields = cast<TupleType>(input.getType()).getTypes().size();
+    auto relationType = cast<RelationType>(input.getType());
+    int64_t numInputFields = relationType.size();
     for (auto i : seq(numInputFields))
       reverseMapping.push_back(i);
     return std::tuple<Value, int64_t, bool>{input, numInputFields, false};
@@ -181,7 +182,7 @@ struct EliminateDuplicateYieldsInProjectPattern
     MLIRContext *context = op.getContext();
     Operation *terminator = op.getExpressions().front().getTerminator();
     int64_t numOriginalYields = terminator->getNumOperands();
-    auto inputTupleType = cast<TupleType>(op.getInput().getType());
+    RelationType inputType = op.getInput().getType();
 
     // Determine duplicate values in `yield` and remember the first ocurrence of
     // each value.
@@ -196,8 +197,8 @@ struct EliminateDuplicateYieldsInProjectPattern
     // original emit order. The input fields are just forwarded, so create
     // identity prefix.
     SmallVector<int64_t> reverseMapping;
-    reverseMapping.reserve(inputTupleType.size() + numOriginalYields);
-    append_range(reverseMapping, iota_range<int64_t>(0, inputTupleType.size(),
+    reverseMapping.reserve(inputType.size() + numOriginalYields);
+    append_range(reverseMapping, iota_range<int64_t>(0, inputType.size(),
                                                      /*Inclusive=*/false));
 
     // Reverse mapping: The fields added by the `expression` regions are now
@@ -205,7 +206,7 @@ struct EliminateDuplicateYieldsInProjectPattern
     // taking the prefix into account.
     for (Value value : terminator->getOperands()) {
       int64_t pos = valuePositions[value];
-      reverseMapping.push_back(inputTupleType.size() + pos);
+      reverseMapping.push_back(inputType.size() + pos);
     }
 
     // Remove duplicate values in `yield` op of the `expressions` region.
@@ -223,10 +224,10 @@ struct EliminateDuplicateYieldsInProjectPattern
     // Compute deduplicated output field types.
     SmallVector<Type> outputTypes;
     int64_t numNewYields = terminator->getNumOperands();
-    outputTypes.reserve(inputTupleType.size() + numNewYields);
-    append_range(outputTypes, inputTupleType.getTypes());
+    outputTypes.reserve(inputType.size() + numNewYields);
+    append_range(outputTypes, inputType.getTypes());
     append_range(outputTypes, terminator->getOperandTypes());
-    auto newOutputType = TupleType::get(context, outputTypes);
+    auto newOutputType = RelationType::get(context, outputTypes);
 
     // Create new `project` op with updated region and output type.
     auto newOp =
@@ -250,14 +251,14 @@ struct EliminateIdentityYieldsInProjectPattern
                                 PatternRewriter &rewriter) const override {
     MLIRContext *context = op.getContext();
     Operation *terminator = op.getExpressions().front().getTerminator();
-    auto inputTupleType = cast<TupleType>(op.getInput().getType());
-    auto resultTupleType = cast<TupleType>(op.getResult().getType());
-    int64_t numInputFields = inputTupleType.size();
+    RelationType inputType = op.getInput().getType();
+    RelationType resultType = op.getResult().getType();
+    int64_t numInputFields = inputType.size();
 
     // Look for yielded values that are just forwarding input fields.
     SmallVector<Value> newYields;
     SmallVector<int64_t> mapping;
-    mapping.reserve(resultTupleType.size());
+    mapping.reserve(resultType.size());
     append_range(mapping, seq(numInputFields));
     for (auto [i, value] : enumerate(terminator->getOperands())) {
       // Test if this is a `field_reference` op that refers a top-level field.
@@ -292,10 +293,10 @@ struct EliminateIdentityYieldsInProjectPattern
     // Compute deduplicated output field types.
     SmallVector<Type> outputTypes;
     int64_t numNewYields = terminator->getNumOperands();
-    outputTypes.reserve(inputTupleType.size() + numNewYields);
-    append_range(outputTypes, inputTupleType.getTypes());
+    outputTypes.reserve(inputType.size() + numNewYields);
+    append_range(outputTypes, inputType.getTypes());
     append_range(outputTypes, terminator->getOperandTypes());
-    auto newOutputType = TupleType::get(context, outputTypes);
+    auto newOutputType = RelationType::get(context, outputTypes);
 
     // Create new `project` op with updated region.
     auto newOp =
@@ -396,8 +397,9 @@ struct PushDuplicatesThroughFilterPattern : public OpRewritePattern<FilterOp> {
                                 newOp.getCondition().end());
 
     // Update the `condition` region.
+    auto newInputType = cast<RelationType>(newInput.getType());
     deduplicateRegionArgs(newOp.getCondition(), emitOp.getMapping(),
-                          newInput.getType(), rewriter);
+                          newInputType.getStructType(), rewriter);
 
     // Deduplicating block args may create common subexpressions. Eliminate
     // them immediately.
@@ -447,14 +449,13 @@ struct PushDuplicatesThroughProjectPattern
 
     // Compute deduplicated output field types.
     Operation *terminator = op.getExpressions().front().getTerminator();
-    auto newInputTupleType = cast<TupleType>(newInput.getType());
+    auto newInputType = cast<RelationType>(newInput.getType());
 
     SmallVector<Type> outputTypes;
-    outputTypes.reserve(newInputTupleType.size() +
-                        terminator->getNumOperands());
-    append_range(outputTypes, newInputTupleType.getTypes());
+    outputTypes.reserve(newInputType.size() + terminator->getNumOperands());
+    append_range(outputTypes, newInputType.getTypes());
     append_range(outputTypes, terminator->getOperandTypes());
-    auto newOutputType = TupleType::get(context, outputTypes);
+    auto newOutputType = RelationType::get(context, outputTypes);
 
     // Create new `project` op. Move over the `expressions` region. This needs
     // to happen now because replacing the op will destroy the region.
@@ -465,7 +466,7 @@ struct PushDuplicatesThroughProjectPattern
 
     // Update the `condition` region.
     deduplicateRegionArgs(newOp.getExpressions(), emitOp.getMapping(),
-                          newInput.getType(), rewriter);
+                          newInputType.getStructType(), rewriter);
 
     // Deduplicating block args may create common subexpressions. Eliminate
     // them immediately.

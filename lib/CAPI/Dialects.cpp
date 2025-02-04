@@ -28,6 +28,17 @@ using namespace mlir::substrait;
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Substrait, substrait, SubstraitDialect)
 
+bool mlirTypeIsASubstraitRelationType(MlirType type) {
+  return mlir::isa<RelationType>(unwrap(type));
+}
+
+MlirType mlirSubstraitRelationTypeGet(MlirContext context, intptr_t numFields,
+                                      MlirType *fieldTypes) {
+  SmallVector<Type, 4> types;
+  ArrayRef<Type> typesRef = unwrapList(numFields, fieldTypes, types);
+  return wrap(RelationType::get(unwrap(context), typesRef));
+}
+
 /// Converts the provided enum value into the equivalent value from
 /// `::mlir::substrait::SerdeFormat`.
 SerdeFormat convertSerdeFormat(MlirSubstraitSerdeFormat format) {

@@ -22,8 +22,8 @@ substrait.plan
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @foo::@bar as ["a", "b"] : tuple<si32, si32>
-    yield %0 : tuple<si32, si32>
+    %0 = named_table @foo::@bar as ["a", "b"] : <si32, si32>
+    yield %0 : !substrait.relation<si32, si32>
   }
 }
 
@@ -42,12 +42,12 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @foo::@bar as ["a", "b"] : tuple<si32, si32>
-    yield %0 : tuple<si32, si32>
+    %0 = named_table @foo::@bar as ["a", "b"] : <si32, si32>
+    yield %0 : !substrait.relation<si32, si32>
   }
   relation {
-    %0 = named_table @foo::@bar as ["a", "b"] : tuple<si32, si32>
-    yield %0 : tuple<si32, si32>
+    %0 = named_table @foo::@bar as ["a", "b"] : <si32, si32>
+    yield %0 : !substrait.relation<si32, si32>
   }
 }
 
@@ -62,8 +62,8 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation as ["x", "y", "z"] {
-    %0 = named_table @t as ["a", "b", "c"] : tuple<si32, tuple<si32>>
-    yield %0 : tuple<si32, tuple<si32>>
+    %0 = named_table @t as ["a", "b", "c"] : <si32, tuple<si32>>
+    yield %0 : !substrait.relation<si32, tuple<si32>>
   }
 }
 

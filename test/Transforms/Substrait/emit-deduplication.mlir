@@ -10,14 +10,14 @@
 // CHECK-NEXT:      %[[V1:.*]] = emit [1, 0] from %[[V0]] :
 // CHECK-NEXT:      %[[V2:.*]] = cross %[[V1]] x %[[V0]] :
 // CHECK-NEXT:      %[[V3:.*]] = emit [0, 0, 1, 1, 0, 2, 3] from %[[V2]] :
-// CHECK-NEXT:      yield %[[V3]] : tuple<si32, si32, si1, si1, si32, si1, si32>
+// CHECK-NEXT:      yield %[[V3]] : !substrait.relation<si32, si32, si1, si1, si32, si1, si32>
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 1, 0, 0, 1] from %0 : tuple<si1, si32> -> tuple<si32, si32, si1, si1, si32>
-    %2 = cross %1 x %0 : tuple<si32, si32, si1, si1, si32> x tuple<si1, si32>
-    yield %2 : tuple<si32, si32, si1, si1, si32, si1, si32>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 1, 0, 0, 1] from %0 : <si1, si32> -> <si32, si32, si1, si1, si32>
+    %2 = cross %1 x %0 : <si32, si32, si1, si1, si32> x <si1, si32>
+    yield %2 : !substrait.relation<si32, si32, si1, si1, si32, si1, si32>
   }
 }
 
@@ -34,10 +34,10 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 0] from %0 : tuple<si1, si32> -> tuple<si32, si1>
-    %2 = cross %0 x %1 : tuple<si1, si32> x tuple<si32, si1>
-    yield %2 : tuple<si1,si32, si32, si1>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 0] from %0 : <si1, si32> -> <si32, si1>
+    %2 = cross %0 x %1 : <si1, si32> x <si32, si1>
+    yield %2 : !substrait.relation<si1,si32, si32, si1>
   }
 }
 
@@ -51,14 +51,14 @@ substrait.plan version 0 : 42 : 1 {
 // CHECK-NEXT:      %[[V1:.*]] = emit [1, 0] from %[[V0]] :
 // CHECK-NEXT:      %[[V2:.*]] = cross %[[V0]] x %[[V1]] :
 // CHECK-NEXT:      %[[V3:.*]] = emit [0, 1, 2, 2, 3, 3, 2] from %[[V2]] :
-// CHECK-NEXT:      yield %[[V3]] : tuple<si1, si32, si32, si32, si1, si1, si32>
+// CHECK-NEXT:      yield %[[V3]] : !substrait.relation<si1, si32, si32, si32, si1, si1, si32>
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 1, 0, 0, 1] from %0 : tuple<si1, si32> -> tuple<si32, si32, si1, si1, si32>
-    %2 = cross %0 x %1 : tuple<si1, si32> x tuple<si32, si32, si1, si1, si32>
-    yield %2 : tuple<si1, si32, si32, si32, si1, si1, si32>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 1, 0, 0, 1] from %0 : <si1, si32> -> <si32, si32, si1, si1, si32>
+    %2 = cross %0 x %1 : <si1, si32> x <si32, si32, si1, si1, si32>
+    yield %2 : !substrait.relation<si1, si32, si32, si32, si1, si1, si32>
   }
 }
 
@@ -75,10 +75,10 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 0] from %0 : tuple<si1, si32> -> tuple<si32, si1>
-    %2 = cross %1 x %0 : tuple<si32, si1> x tuple<si1, si32>
-    yield %2 : tuple<si32, si1, si1, si32>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 0] from %0 : <si1, si32> -> <si32, si1>
+    %2 = cross %1 x %0 : <si32, si1> x <si1, si32>
+    yield %2 : !substrait.relation<si32, si1, si1, si32>
   }
 }
 
@@ -97,11 +97,11 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 1] from %0 : tuple<si1, si32> -> tuple<si32, si32>
-    %2 = emit [0, 0] from %0 : tuple<si1, si32> -> tuple<si1, si1>
-    %3 = cross %1 x %2 : tuple<si32, si32> x tuple<si1, si1>
-    yield %3 : tuple<si32, si32, si1, si1>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 1] from %0 : <si1, si32> -> <si32, si32>
+    %2 = emit [0, 0] from %0 : <si1, si32> -> <si1, si1>
+    %3 = cross %1 x %2 : <si32, si32> x <si1, si1>
+    yield %3 : !substrait.relation<si32, si32, si1, si1>
   }
 }
 
@@ -120,11 +120,11 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 0] from %0 : tuple<si1, si32> -> tuple<si32, si1>
-    %2 = emit [0, 0] from %0 : tuple<si1, si32> -> tuple<si1, si1>
-    %3 = cross %1 x %2 : tuple<si32, si1> x tuple<si1, si1>
-    yield %3 : tuple<si32, si1, si1, si1>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 0] from %0 : <si1, si32> -> <si32, si1>
+    %2 = emit [0, 0] from %0 : <si1, si32> -> <si1, si1>
+    %3 = cross %1 x %2 : <si32, si1> x <si1, si1>
+    yield %3 : !substrait.relation<si32, si1, si1, si1>
   }
 }
 
@@ -143,11 +143,11 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 1] from %0 : tuple<si1, si32> -> tuple<si32, si32>
-    %2 = emit [1, 0] from %0 : tuple<si1, si32> -> tuple<si32, si1>
-    %3 = cross %1 x %2 : tuple<si32, si32> x tuple<si32, si1>
-    yield %3 : tuple<si32, si32, si32, si1>
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 1] from %0 : <si1, si32> -> <si32, si32>
+    %2 = emit [1, 0] from %0 : <si1, si32> -> <si32, si1>
+    %3 = cross %1 x %2 : <si32, si32> x <si32, si1>
+    yield %3 : !substrait.relation<si32, si32, si32, si1>
   }
 }
 
@@ -173,13 +173,13 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b", "c", "d", "e"] : tuple<si1, si1, tuple<si1, si32>>
+    %0 = named_table @t1 as ["a", "b", "c", "d", "e"] : <si1, si1, tuple<si1, si32>>
     // Fields in position 1 and 3 are duplicates of field in position 0, so we
     // expect all references to the former to be replaced by the latter and an
     // `emit` re-establishing the original fields after the `filter`.
     %1 = emit [1, 1, 2, 1, 0] from %0
-        : tuple<si1, si1, tuple<si1, si32>> -> tuple<si1, si1, tuple<si1, si32>, si1, si1>
-    %2 = filter %1 : tuple<si1, si1, tuple<si1, si32>, si1, si1> {
+        : <si1, si1, tuple<si1, si32>> -> <si1, si1, tuple<si1, si32>, si1, si1>
+    %2 = filter %1 : <si1, si1, tuple<si1, si32>, si1, si1> {
     ^bb0(%arg0: tuple<si1, si1, tuple<si1, si32>, si1, si1>):
       %3 = field_reference %arg0[0] : tuple<si1, si1, tuple<si1, si32>, si1, si1>
       %4 = field_reference %arg0[1] : tuple<si1, si1, tuple<si1, si32>, si1, si1>
@@ -191,7 +191,7 @@ substrait.plan version 0 : 42 : 1 {
       %a = "test.op"(%3, %4, %5, %7, %8, %9) : (si1, si1, si1, si32, si1, si1) -> si1
       yield %a : si1
     }
-    yield %2 : tuple<si1, si1, tuple<si1, si32>, si1, si1>
+    yield %2 : !substrait.relation<si1, si1, tuple<si1, si32>, si1, si1>
   }
 }
 
@@ -203,7 +203,7 @@ substrait.plan version 0 : 42 : 1 {
 // CHECK-NEXT:    relation
 // CHECK-NEXT:      %[[V0:.*]] = named_table
 // CHECK-NEXT:      %[[V1:.*]] = emit [1] from %[[V0]] :
-// CHECK-NEXT:      %[[V2:.*]] = project %[[V1]] : tuple<si32> -> tuple<si32, si1> {
+// CHECK-NEXT:      %[[V2:.*]] = project %[[V1]] : <si32> -> <si32, si1> {
 // CHECK-NEXT:      ^{{.*}}(%[[ARG0:.*]]: [[TYPE:.*]]):
 // CHECK-NEXT:        %[[V3:.*]] = field_reference %[[ARG0]][0] : [[TYPE]]
 // CHECK-NEXT:        %[[V5:.*]] = "test.op"(%[[V3]], %[[V3]]) :
@@ -213,16 +213,16 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 1] from %0 : tuple<si1, si32> -> tuple<si32, si32>
-    %2 = project %1 : tuple<si32, si32> -> tuple<si32, si32, si1> {
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 1] from %0 : <si1, si32> -> <si32, si32>
+    %2 = project %1 : <si32, si32> -> <si32, si32, si1> {
     ^bb0(%arg : tuple<si32, si32>):
       %3 = field_reference %arg[0] : tuple<si32, si32>
       %4 = field_reference %arg[1] : tuple<si32, si32>
       %5 = "test.op"(%3, %4) : (si32, si32) -> si1
       yield %5 : si1
     }
-    yield %2 : tuple<si32, si32, si1>
+    yield %2 : !substrait.relation<si32, si32, si1>
   }
 }
 
@@ -243,8 +243,8 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a"] : tuple<si32>
-    %1 = project %0 : tuple<si32> -> tuple<si32, si1, si1> {
+    %0 = named_table @t1 as ["a"] : <si32>
+    %1 = project %0 : <si32> -> <si32, si1, si1> {
     ^bb0(%arg : tuple<si32>):
       %2 = field_reference %arg[0] : tuple<si32>
       %3 = "test.op"(%2) : (si32) -> si1
@@ -253,7 +253,7 @@ substrait.plan version 0 : 42 : 1 {
       // `project`.
       yield %3, %3 : si1, si1
     }
-    yield %1 : tuple<si32, si1, si1>
+    yield %1 : !substrait.relation<si32, si1, si1>
   }
 }
 
@@ -274,8 +274,8 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si32, si1>
-    %1 = project %0 : tuple<si32, si1> -> tuple<si32, si1, si32, si1> {
+    %0 = named_table @t1 as ["a", "b"] : <si32, si1>
+    %1 = project %0 : <si32, si1> -> <si32, si1, si32, si1> {
     ^bb0(%arg0: tuple<si32, si1>):
       %2 = field_reference %arg0[0] : tuple<si32, si1>
       %3 = "test.op"(%2) : (si32) -> si1
@@ -284,7 +284,7 @@ substrait.plan version 0 : 42 : 1 {
       // following the `project` instead.
       yield %2, %3 : si32, si1
     }
-    yield %1 : tuple<si32, si1, si32, si1>
+    yield %1 : !substrait.relation<si32, si1, si32, si1>
   }
 }
 
@@ -304,18 +304,18 @@ substrait.plan version 0 : 42 : 1 {
 // CHECK-NEXT:    relation
 // CHECK-NEXT:      %[[V0:.*]] = named_table
 // CHECK-NEXT:      %[[V1:.*]] = emit [1, 1, 1, 1] from %[[V0]] :
-// CHECK-NEXT:      yield %[[V1]] : tuple<si32, si32, si32, si32>
+// CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si32, si32, si32, si32>
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si1, si32>
-    %1 = emit [1, 1] from %0 : tuple<si1, si32> -> tuple<si32, si32>
-    %2 = project %1 : tuple<si32, si32> -> tuple<si32, si32, si32, si32> {
+    %0 = named_table @t1 as ["a", "b"] : <si1, si32>
+    %1 = emit [1, 1] from %0 : <si1, si32> -> <si32, si32>
+    %2 = project %1 : <si32, si32> -> <si32, si32, si32, si32> {
     ^bb0(%arg : tuple<si32, si32>):
       %3 = field_reference %arg[0] : tuple<si32, si32>
       %4 = field_reference %arg[1] : tuple<si32, si32>
       yield %3, %4 : si32, si32
     }
-    yield %2 : tuple<si32, si32, si32, si32>
+    yield %2 : !substrait.relation<si32, si32, si32, si32>
   }
 }

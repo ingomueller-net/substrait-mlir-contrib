@@ -48,7 +48,7 @@ def testNamedTable():
     plan_rel = ss.PlanRelOp()
     with ir.InsertionPoint(plan_rel.body):
       si32 = ir.IntegerType.get_signed(32)
-      result_type = ir.TupleType.get_tuple([si32, si32])
+      result_type = ss.RelationType.get([si32, si32])
       field_names = ir.ArrayAttr.get([ir.StringAttr.get(n) for n in ["a", "b"]])
       named_table = ss.NamedTableOp(result_type, "t", field_names)
       ss.YieldOp(named_table)

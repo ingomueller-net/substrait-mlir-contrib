@@ -25,12 +25,12 @@ version {
 
 # CHECK-LABEL: substrait.plan
 # CHECK-NEXT:    relation as ["x", "y", "z"] {
-# CHECK-NEXT:      %[[V0:.*]] = named_table @t as ["a", "b", "c"] : tuple<si32, tuple<si32>>
-# CHECK-NEXT:      yield %[[V0]] : tuple<si32, tuple<si32>>
+# CHECK-NEXT:      %[[V0:.*]] = named_table @t as ["a", "b", "c"] : <si32, tuple<si32>>
+# CHECK-NEXT:      yield %[[V0]] : !substrait.relation<si32, tuple<si32>>
 # CHECK-NEXT:    }
 # CHECK-NEXT:    relation {
-# CHECK-NEXT:      %[[V1:.*]] = named_table @t as ["a"] : tuple<si32>
-# CHECK-NEXT:      yield %[[V1]] : tuple<si32>
+# CHECK-NEXT:      %[[V1:.*]] = named_table @t as ["a"] : <si32>
+# CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si32>
 
 relations {
   root {

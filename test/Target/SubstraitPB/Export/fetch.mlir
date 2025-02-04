@@ -23,9 +23,9 @@
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a"] : tuple<si32>
-    %1 = fetch 5 offset 3 from %0 : tuple<si32>
-    yield %1 : tuple<si32>
+    %0 = named_table @t1 as ["a"] : <si32>
+    %1 = fetch 5 offset 3 from %0 : <si32>
+    yield %1 : !substrait.relation<si32>
   }
 }
 
@@ -42,11 +42,11 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a"] : tuple<si32>
+    %0 = named_table @t1 as ["a"] : <si32>
     %1 = fetch 3 from %0
             advanced_extension optimization = "\08*"
               : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-            : tuple<si32>
-    yield %1 : tuple<si32>
+            : <si32>
+    yield %1 : !substrait.relation<si32>
   }
 }

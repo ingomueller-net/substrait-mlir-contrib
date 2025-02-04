@@ -15,7 +15,7 @@
 # CHECK-NEXT:    extension_function @[[F1:.*]] at @[[URI]]["somefunc"]
 # CHECK-NEXT:    relation
 # CHECK-NEXT:      %[[V0:.*]] = named_table
-# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : tuple<si32> -> tuple<si1, si1, si32, si32>
+# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : <si32> -> <si1, si1, si32, si32>
 # CHECK-NEXT:        groupings {
 # CHECK-NEXT:        (%[[ARG0:.*]]: tuple<si32>):
 # CHECK-DAG:           %[[V2:.*]] = literal -1 : si1
@@ -29,7 +29,7 @@
 # CHECK-DAG:           %[[V5:.*]] = call @[[F1]](%[[V4]]) aggregate : (si32) -> si32
 # CHECK-NEXT:          yield %[[V5]] : si32
 # CHECK-NEXT:        }
-# CHECK-NEXT:      yield %[[V1]] : tuple<si1, si1, si32, si32>
+# CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si1, si1, si32, si32>
 
 extension_uris {
   uri: "http://some.url/with/extensions.yml"
@@ -132,13 +132,13 @@ version {
 # CHECK-LABEL: substrait.plan
 # CHECK-NEXT:    relation
 # CHECK-NEXT:      %[[V0:.*]] = named_table
-# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : tuple<si32> -> tuple<si1>
+# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : <si32> -> <si1>
 # CHECK-NEXT:        groupings {
 # CHECK-NEXT:        (%[[ARG0:.*]]: tuple<si32>):
 # CHECK-DAG:           %[[V2:.*]] = literal 0 : si1
 # CHECK-NEXT:          yield %[[V2]] : si1
 # CHECK-NEXT:        }
-# CHECK-NEXT:      yield %[[V1]] : tuple<si1>
+# CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si1>
 
 relations {
   rel {
@@ -191,14 +191,14 @@ version {
 # CHECK-NEXT:    extension_function @[[F1:.*]] at @[[URI]]["somefunc"]
 # CHECK-NEXT:    relation
 # CHECK-NEXT:      %[[V0:.*]] = named_table
-# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : tuple<si32> -> tuple<si32>
+# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : <si32> -> <si32>
 # CHECK-NEXT:        measures {
 # CHECK-NEXT:        (%[[ARG1:.*]]: tuple<si32>):
 # CHECK-DAG:           %[[V2:.*]] = field_reference %[[ARG0]][0] : tuple<si32>
 # CHECK-DAG:           %[[V3:.*]] = call @[[F1]](%[[V2]]) aggregate : (si32) -> si32
 # CHECK-NEXT:          yield %[[V3]] : si32
 # CHECK-NEXT:        }
-# CHECK-NEXT:      yield %[[V1]] : tuple<si32>
+# CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si32>
 
 extension_uris {
   uri: "http://some.url/with/extensions.yml"
@@ -277,7 +277,7 @@ version {
 # CHECK-NEXT:    extension_function @[[F1:.*]] at @[[URI]]["somefunc"]
 # CHECK-NEXT:    relation
 # CHECK-NEXT:      %[[V0:.*]] = named_table
-# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : tuple<si32> -> tuple<si32>
+# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : <si32> -> <si32>
 # CHECK-NEXT:        grouping_sets []
 # CHECK-NEXT:        measures {
 # CHECK-NEXT:        (%[[ARG1:.*]]: tuple<si32>):
@@ -285,7 +285,7 @@ version {
 # CHECK-DAG:           %[[V3:.*]] = call @[[F1]](%[[V2]]) aggregate : (si32) -> si32
 # CHECK-NEXT:          yield %[[V3]] : si32
 # CHECK-NEXT:        }
-# CHECK-NEXT:      yield %[[V1]] : tuple<si32>
+# CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si32>
 
 extension_uris {
   uri: "http://some.url/with/extensions.yml"
@@ -362,7 +362,7 @@ version {
 # CHECK-NEXT:    extension_function @[[F1:.*]] at @[[URI]]["somefunc"]
 # CHECK-NEXT:    relation
 # CHECK-NEXT:      %[[V0:.*]] = named_table
-# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : tuple<si32> ->
+# CHECK-NEXT:      %[[V1:.*]] = aggregate %[[V0]] : <si32> ->
 # CHECK-NEXT:        measures {
 # CHECK-NEXT:        (%[[ARG1:.*]]: tuple<si32>):
 # CHECK-DAG:           %[[V2:.*]] = call @[[F1]](%{{.*}}) aggregate initial_to_intermediate : (si32) -> si32
@@ -589,7 +589,7 @@ version {
 # CHECK-LABEL: substrait.plan
 # CHECK:           aggregate %{{.*}} advanced_extension optimization = "\08*"
 # CHECK-SAME:          : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:        : tuple
+# CHECK-SAME:        : <si32> -> <si1>
 
 relations {
   rel {

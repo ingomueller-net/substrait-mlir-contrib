@@ -13,7 +13,7 @@
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.decimal<12, 3>>
+# CHECK-SAME:       : <!substrait.decimal<12, 3>>
 
 relations {
   rel {
@@ -51,7 +51,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.fixed_binary<5>>
+# CHECK-SAME:       : <!substrait.fixed_binary<5>>
 
 relations {
   rel {
@@ -88,7 +88,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.var_char<6>>
+# CHECK-SAME:       : <!substrait.var_char<6>>
 
 relations {
   rel {
@@ -125,7 +125,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.fixed_char<5>>
+# CHECK-SAME:       : <!substrait.fixed_char<5>>
 
 relations {
   rel {
@@ -170,7 +170,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.uuid>
+# CHECK-SAME:       : <!substrait.uuid>
 
 relations {
   rel {
@@ -206,7 +206,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.interval_year_month, !substrait.interval_day_second>
+# CHECK-SAME:       : <!substrait.interval_year_month, !substrait.interval_day_second>
 
 relations {
   rel {
@@ -248,7 +248,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.time>
+# CHECK-SAME:       : <!substrait.time>
 
 relations {
   rel {
@@ -283,8 +283,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.date>
+# CHECK-NEXT:     named_table {{.*}} : <!substrait.date>
 
 relations {
   rel {
@@ -320,7 +319,7 @@ version {
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
 # CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.timestamp, !substrait.timestamp_tz>
+# CHECK-SAME:       : <!substrait.timestamp, !substrait.timestamp_tz>
 
 relations {
   rel {
@@ -361,8 +360,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.binary>
+# CHECK-NEXT:     named_table {{.*}} : <!substrait.binary>
 
 relations {
   rel {
@@ -397,8 +395,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<!substrait.string>
+# CHECK-NEXT:     named_table {{.*}} : <!substrait.string>
 
 relations {
   rel {
@@ -433,8 +430,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<f32, f64>
+# CHECK-NEXT:     named_table {{.*}} : <f32, f64>
 
 relations {
   rel {
@@ -475,8 +471,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<f32, tuple<f32>>
+# CHECK-NEXT:     named_table {{.*}} : <f32, tuple<f32>>
 
 relations {
   rel {
@@ -522,8 +517,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<si1, si8, si16, si32, si64>
+# CHECK-NEXT:     named_table {{.*}} : <si1, si8, si16, si32, si64>
 
 relations {
   rel {
@@ -582,8 +576,7 @@ version {
 
 # CHECK:      substrait.plan
 # CHECK-NEXT:   relation
-# CHECK-NEXT:     named_table
-# CHECK-SAME:       : tuple<si1, tuple<si1>>
+# CHECK-NEXT:     named_table {{.*}} : <si1, tuple<si1>>
 
 relations {
   rel {

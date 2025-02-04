@@ -68,6 +68,11 @@ def Substrait_RelOpInterface : OpInterface<"RelOpInterface"> {
     turn, holds a more specialized message with the information specific to the
     concrete relational operation.
   }];
+  let methods = [InterfaceMethod<
+    "Get the result relation",
+    "::mlir::TypedValue<::mlir::substrait::RelationType>", "getResult",
+    /*args=*/(ins ), /*methodBody=*/ "return $_op.getResult();"
+  >];
   let cppNamespace = "::mlir::substrait";
 }
 

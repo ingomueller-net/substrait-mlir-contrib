@@ -14,8 +14,8 @@
 # CHECK-NEXT:    relation {
 # CHECK-NEXT:      %[[V0:.*]] = extension_table
 # CHECK-SAME:          "\08*" : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:        as ["a"] : tuple<si32>
-# CHECK-NEXT:      yield %[[V0]] : tuple<si32>
+# CHECK-SAME:        as ["a"] : <si32>
+# CHECK-NEXT:      yield %[[V0]] : !substrait.relation<si32>
 
 relations {
   rel {
@@ -56,7 +56,7 @@ version {
 # CHECK-SAME:        "some detail" : !substrait.any<"some url"> as ["a"]
 # CHECK-SAME:        advanced_extension optimization = "\08*"
 # CHECK-SAME:          : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:        : tuple<si32>
+# CHECK-SAME:        : <si32>
 
 relations {
   rel {

@@ -51,12 +51,12 @@ substrait.plan
 
 substrait.plan version 0 : 42 : 1 {
   relation as ["x", "y", "z"] {
-    %0 = named_table @t as ["a", "b", "c"] : tuple<si32, tuple<si32>>
-    yield %0 : tuple<si32, tuple<si32>>
+    %0 = named_table @t as ["a", "b", "c"] : <si32, tuple<si32>>
+    yield %0 : !substrait.relation<si32, tuple<si32>>
   }
   relation  {
-    %0 = named_table @t as ["a"] : tuple<si32>
-    yield %0 : tuple<si32>
+    %0 = named_table @t as ["a"] : <si32>
+    yield %0 : !substrait.relation<si32>
   }
 }
 

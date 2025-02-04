@@ -16,6 +16,10 @@
 #include "mlir/Interfaces/CastInterfaces.h"       // IWYU: keep
 #include "mlir/Interfaces/InferTypeOpInterface.h" // IWYU: keep
 
+namespace mlir::substrait::detail {
+struct RelationTypeStorage;
+} // namespace mlir::substrait::detail
+
 //===----------------------------------------------------------------------===//
 // Substrait dialect
 //===----------------------------------------------------------------------===//

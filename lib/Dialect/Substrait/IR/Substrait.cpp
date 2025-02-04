@@ -11,6 +11,7 @@
 #include "mlir/IR/DialectImplementation.h" // IWYU pragma: keep
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LogicalResult.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/TypeSwitch.h" // IWYU pragma: keep
 #include "llvm/Support/Regex.h"
@@ -23,6 +24,51 @@ using namespace mlir::substrait;
 //===----------------------------------------------------------------------===//
 
 #include "substrait-mlir/Dialect/Substrait/IR/SubstraitOpsDialect.cpp.inc"
+
+namespace mlir::substrait::detail {
+
+/// Storage class for Substrait's `RelationType`.
+///
+/// This is a copy of the upstream `TupleTypeStorage`, which we can't reuse
+/// because it is in a private header.
+struct RelationTypeStorage final
+    : public TypeStorage,
+      public llvm::TrailingObjects<RelationTypeStorage, Type> {
+  using KeyTy = TypeRange;
+
+  RelationTypeStorage(unsigned numTypes) : numElements(numTypes) {}
+
+  /// Construction.
+  static RelationTypeStorage *construct(TypeStorageAllocator &allocator,
+                                        TypeRange key) {
+    // Allocate a new storage instance.
+    auto byteSize = RelationTypeStorage::totalSizeToAlloc<Type>(key.size());
+    auto *rawMem = allocator.allocate(byteSize, alignof(RelationTypeStorage));
+    auto *result = ::new (rawMem) RelationTypeStorage(key.size());
+
+    // Copy in the element types into the trailing storage.
+    std::uninitialized_copy(key.begin(), key.end(),
+                            result->getTrailingObjects<Type>());
+    return result;
+  }
+
+  bool operator==(const KeyTy &key) const { return key == getTypes(); }
+
+  /// Return the number of held types.
+  unsigned size() const { return numElements; }
+
+  /// Return the held types.
+  ArrayRef<Type> getTypes() const {
+    return {getTrailingObjects<Type>(), size()};
+  }
+
+  KeyTy getAsKey() const { return getTypes(); }
+
+  /// The number of tuple elements.
+  unsigned numElements;
+};
+
+} // namespace mlir::substrait::detail
 
 void SubstraitDialect::initialize() {
 #define GET_OP_LIST
@@ -397,6 +443,39 @@ void printFixedBinaryLiteral(AsmPrinter &printer, StringAttr value,
   printer << value;
 }
 
+Type RelationType::parse(AsmParser &parser) {
+  // Parse `<` literal.
+  if (failed(parser.parseLess()))
+    return Type();
+
+  // If we parse the `>` literal, we have an empty list of types and are done.
+  if (succeeded(parser.parseOptionalGreater()))
+    return get(parser.getContext());
+
+  // Parse list of field types.
+  SmallVector<Type> fieldTypes;
+  if (failed(parser.parseCommaSeparatedList([&]() {
+        Type type;
+        if (failed(parser.parseType(type)))
+          return failure();
+        fieldTypes.push_back(type);
+        return success();
+      })))
+    return Type();
+
+  // Parse `>` literal.
+  if (failed(parser.parseGreater()))
+    return Type();
+
+  return get(parser.getContext(), fieldTypes);
+}
+
+void RelationType::print(AsmPrinter &printer) const {
+  printer << "<";
+  llvm::interleaveComma(getFieldTypes(), printer);
+  printer << ">";
+}
+
 //===----------------------------------------------------------------------===//
 // Substrait operations
 //===----------------------------------------------------------------------===//
@@ -431,25 +510,50 @@ namespace {
 
 /// Computes the type of the nested field of the given `type` identified by
 /// `position`. Each entry `n` in the given index array `position` corresponds
-/// to the `n`-th entry in that level. The function is thus implemented
-/// recursively, where each recursion level extracts the type of the outer-most
-/// level identified by the first index in the `position` array.
+/// to the `n`-th entry in that level.
+FailureOr<Type> computeTypeAtPosition(Location loc, Type type,
+                                      ArrayRef<int64_t> position);
+
+namespace impl {
+
+/// Helper that extracts computes the type at a position given a container type.
+template <typename ContainerType>
+FailureOr<Type> computeTypeAtPositionHelper(Location loc,
+                                            ContainerType containerType,
+                                            ArrayRef<int64_t> position) {
+  assert(!position.empty() && "expected to be called with non-empty position");
+
+  // Recurse into fields of first index in position array.
+  int64_t index = position[0];
+  ArrayRef<Type> fieldTypes = containerType.getTypes();
+  if (index >= static_cast<int64_t>(fieldTypes.size()) || index < 0)
+    return emitError(loc) << index << " is not a valid index for "
+                          << containerType;
+
+  return ::computeTypeAtPosition(loc, fieldTypes[index], position.drop_front());
+}
+} // namespace impl
+
+// Implementation of `computeTypeAtPosition`.
+//
+// The function is implemented corecursively with `computeTypeAtPositionHelper`,
+// where each recursion level extracts the type of the outer-most level
+// identified by the first index in the `position` array. In each level, this
+// function handles the leaf case and type-switches into the helper, which is
+// templated using the container type such that the extraction of the nested
+// types can use the concrete container type.
 FailureOr<Type> computeTypeAtPosition(Location loc, Type type,
                                       ArrayRef<int64_t> position) {
   if (position.empty())
     return type;
 
-  // Recurse into tuple field of first index in position array.
-  if (auto tupleType = llvm::dyn_cast<TupleType>(type)) {
-    int64_t index = position[0];
-    ArrayRef<Type> fieldTypes = tupleType.getTypes();
-    if (index >= static_cast<int64_t>(fieldTypes.size()) || index < 0)
-      return emitError(loc) << index << " is not a valid index for " << type;
-
-    return computeTypeAtPosition(loc, fieldTypes[index], position.drop_front());
-  }
-
-  return emitError(loc) << "can't extract element from type " << type;
+  return TypeSwitch<Type, FailureOr<Type>>(type)
+      .Case<RelationType, TupleType>([&](auto type) {
+        return impl::computeTypeAtPositionHelper(loc, type, position);
+      })
+      .Default([&](auto type) {
+        return emitError(loc) << "can't extract element from type " << type;
+      });
 }
 
 /// Verifies that the provided field names match the provided field types. While
@@ -758,8 +862,8 @@ LogicalResult AggregateOp::inferReturnTypes(
     fieldTypes.push_back(si32);
   }
 
-  // Build tuple type from field types.
-  auto resultType = TupleType::get(context, fieldTypes);
+  // Build relation type from field types.
+  auto resultType = RelationType::get(context, fieldTypes);
   inferredReturnTypes.push_back(resultType);
 
   return success();
@@ -767,12 +871,13 @@ LogicalResult AggregateOp::inferReturnTypes(
 
 LogicalResult AggregateOp::verifyRegions() {
   // Verify properties that need to hold for both regions.
-  auto inputTupleType = getInput().getType();
+  RelationType inputType = getInput().getType();
+  TupleType inputTupleType = inputType.getStructType();
   for (auto [idx, region] : llvm::enumerate(getRegions())) {
     if (region->empty()) // Regions are allowed to be empty.
       continue;
 
-    // Verify that the regions have the input tuple as argument.
+    // Verify that the regions have the input struct as argument.
     if (region->getArgumentTypes() != TypeRange{inputTupleType})
       return emitOpError() << "has region #" << idx
                            << " with invalid argument types (expected: "
@@ -865,13 +970,15 @@ CrossOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
   Value leftInput = operands[0];
   Value rightInput = operands[1];
 
-  TypeRange leftFieldTypes = cast<TupleType>(leftInput.getType()).getTypes();
-  TypeRange rightFieldTypes = cast<TupleType>(rightInput.getType()).getTypes();
+  TypeRange leftFieldTypes =
+      cast<RelationType>(leftInput.getType()).getFieldTypes();
+  TypeRange rightFieldTypes =
+      cast<RelationType>(rightInput.getType()).getFieldTypes();
 
   SmallVector<mlir::Type> fieldTypes;
   llvm::append_range(fieldTypes, leftFieldTypes);
   llvm::append_range(fieldTypes, rightFieldTypes);
-  auto resultType = TupleType::get(context, fieldTypes);
+  auto resultType = RelationType::get(context, fieldTypes);
 
   inferredReturnTypes = SmallVector<Type>{resultType};
 
@@ -904,7 +1011,7 @@ OpFoldResult EmitOp::fold(FoldAdaptor adaptor) {
   // Remainder: fold away if the mapping is the identity mapping.
 
   // Return if the mapping is not the identity mapping.
-  int64_t numFields = cast<TupleType>(getInput().getType()).size();
+  int64_t numFields = cast<RelationType>(getInput().getType()).size();
   int64_t numIndices = getMapping().size();
   if (numFields != numIndices)
     return {};
@@ -931,7 +1038,7 @@ EmitOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
 
   ArrayAttr mapping = typedProperties->getMapping();
   Type inputType = operands[0].getType();
-  ArrayRef<Type> inputTypes = mlir::cast<TupleType>(inputType).getTypes();
+  TypeRange inputTypes = mlir::cast<RelationType>(inputType).getFieldTypes();
 
   // Map input types to output types.
   SmallVector<Type> outputTypes;
@@ -945,8 +1052,8 @@ EmitOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
     outputTypes.push_back(mappedType);
   }
 
-  // Create final tuple type.
-  auto outputType = TupleType::get(context, outputTypes);
+  // Create final relation type.
+  auto outputType = RelationType::get(context, outputTypes);
   inferredReturnTypes.push_back(outputType);
 
   return success();
@@ -954,7 +1061,8 @@ EmitOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
 
 LogicalResult ExtensionTableOp::verify() {
   llvm::ArrayRef<Attribute> fieldNames = getFieldNames().getValue();
-  auto tupleType = llvm::cast<TupleType>(getResult().getType());
+  RelationType relationType = getResult().getType();
+  TupleType tupleType = relationType.getStructType();
   return verifyNamedStruct(getOperation(), fieldNames, tupleType);
 }
 
@@ -1000,7 +1108,8 @@ LogicalResult FilterOp::verifyRegions() {
            << yieldedType << ")";
 
   // Verify that block has argument of input tuple type.
-  Type tupleType = getResult().getType();
+  RelationType relationType = getResult().getType();
+  TupleType tupleType = relationType.getStructType();
   if (condition.getNumArguments() != 1 ||
       condition.getArgument(0).getType() != tupleType) {
     InFlightDiagnostic diag = emitOpError()
@@ -1043,8 +1152,10 @@ JoinOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
   Value leftInput = operands[0];
   Value rightInput = operands[1];
 
-  TypeRange leftFieldTypes = cast<TupleType>(leftInput.getType()).getTypes();
-  TypeRange rightFieldTypes = cast<TupleType>(rightInput.getType()).getTypes();
+  TypeRange leftFieldTypes =
+      cast<RelationType>(leftInput.getType()).getFieldTypes();
+  TypeRange rightFieldTypes =
+      cast<RelationType>(rightInput.getType()).getFieldTypes();
 
   // Get accessor to `join_type`.
   Adaptor adaptor(operands, attributes, properties, regions);
@@ -1070,7 +1181,7 @@ JoinOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
     break;
   }
 
-  auto resultType = TupleType::get(context, fieldTypes);
+  auto resultType = RelationType::get(context, fieldTypes);
 
   inferredReturnTypes = SmallVector<Type>{resultType};
 
@@ -1079,7 +1190,8 @@ JoinOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
 
 LogicalResult NamedTableOp::verify() {
   llvm::ArrayRef<Attribute> fieldNames = getFieldNames().getValue();
-  auto tupleType = llvm::cast<TupleType>(getResult().getType());
+  RelationType relationType = getResult().getType();
+  TupleType tupleType = relationType.getStructType();
   return verifyNamedStruct(getOperation(), fieldNames, tupleType);
 }
 
@@ -1098,7 +1210,8 @@ LogicalResult PlanRelOp::verifyRegions() {
 
   // Otherwise, use helper to verify.
   llvm::ArrayRef<Attribute> fieldNames = getFieldNames()->getValue();
-  auto tupleType = llvm::cast<TupleType>(yieldOp.getValue().getTypes()[0]);
+  auto relationType = cast<RelationType>(yieldOp.getValue().getTypes()[0]);
+  TupleType tupleType = relationType.getStructType();
   return verifyNamedStruct(getOperation(), fieldNames, tupleType);
 }
 
@@ -1115,29 +1228,30 @@ OpFoldResult ProjectOp::fold(FoldAdaptor adaptor) {
 
 LogicalResult ProjectOp::verifyRegions() {
   // Verify that the expression block has a matching argument type.
-  auto inputTupleType = llvm::cast<TupleType>(getInput().getType());
-  auto blockArgTypes = getExpressions().front().getArgumentTypes();
-  if (blockArgTypes != ArrayRef<Type>(inputTupleType))
+  RelationType inputType = getInput().getType();
+  TupleType inputTupleType = inputType.getStructType();
+  TypeRange blockArgTypes = getExpressions().front().getArgumentTypes();
+  if (blockArgTypes != TypeRange{inputTupleType})
     return emitOpError()
            << "has 'expressions' region with mismatching argument type"
            << " (has: " << blockArgTypes << ", expected: " << inputTupleType
            << ")";
 
   // Verify that the input field types are a prefix of the output field types.
-  size_t numInputFields = inputTupleType.getTypes().size();
-  auto outputTupleType = llvm::cast<TupleType>(getResult().getType());
+  size_t numInputFields = inputType.size();
+  auto outputType = llvm::cast<RelationType>(getResult().getType());
   ArrayRef<Type> outputPrefixTypes =
-      outputTupleType.getTypes().take_front(numInputFields);
+      outputType.getFieldTypes().take_front(numInputFields);
 
-  if (inputTupleType.getTypes() != outputPrefixTypes)
+  if (inputType.getFieldTypes() != outputPrefixTypes)
     return emitOpError()
            << "has output field type whose prefix is different from "
-           << "input field types (" << inputTupleType.getTypes() << " vs "
+           << "input field types (" << inputType.getFieldTypes() << " vs "
            << outputPrefixTypes << ")";
 
   // Verify that yielded operands have the same types as the new output fields.
-  ArrayRef<Type> newFieldTypes =
-      outputTupleType.getTypes().drop_front(numInputFields);
+  TypeRange newFieldTypes =
+      outputType.getFieldTypes().drop_front(numInputFields);
   auto yieldOp = llvm::cast<YieldOp>(getExpressions().front().getTerminator());
 
   if (yieldOp.getOperandTypes() != newFieldTypes)

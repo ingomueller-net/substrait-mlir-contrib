@@ -298,13 +298,14 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
   mlir::FailureOr<RelOpInterface> inputOp = importRel(builder, inputRel);
   if (failed(inputOp))
     return failure();
-  Value inputVal = inputOp.value()->getResult(0);
+  TypedValue<RelationType> inputVal = inputOp.value().getResult();
+  TupleType inputTupleType = inputVal.getType().getStructType();
 
   // Import measures if any.
   auto measuresRegion = std::make_unique<Region>();
   if (aggregateRel.measures_size() > 0) {
     Block *measuresBlock = &measuresRegion->emplaceBlock();
-    measuresBlock->addArgument(inputVal.getType(), loc);
+    measuresBlock->addArgument(inputTupleType, loc);
 
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(measuresBlock);
@@ -329,7 +330,7 @@ importAggregateRel(ImplicitLocOpBuilder builder, const Rel &message) {
   SmallVector<Attribute> groupingSetsAttrs;
   if (aggregateRel.groupings_size() > 0) {
     Block *groupingsBlock = &groupingsRegion->emplaceBlock();
-    groupingsBlock->addArgument(inputVal.getType(), loc);
+    groupingsBlock->addArgument(inputTupleType, loc);
 
     // Grouping expressions, i.e., values yielded from `groupings`.
     SmallVector<Value> groupingExprValues;
@@ -450,8 +451,8 @@ static mlir::FailureOr<CrossOp> importCrossRel(ImplicitLocOpBuilder builder,
     return failure();
 
   // Build `CrossOp`.
-  Value leftVal = leftOp.value()->getResult(0);
-  Value rightVal = rightOp.value()->getResult(0);
+  Value leftVal = leftOp.value().getResult();
+  Value rightVal = rightOp.value().getResult();
 
   auto crossOp = builder.create<CrossOp>(leftVal, rightVal);
 
@@ -475,7 +476,7 @@ static mlir::FailureOr<SetOp> importSetRel(ImplicitLocOpBuilder builder,
     mlir::FailureOr<RelOpInterface> inputOp = importRel(builder, inputRel);
     if (failed(inputOp))
       return failure();
-    inputsVal.push_back(inputOp.value()->getResult(0));
+    inputsVal.push_back(inputOp.value().getResult());
   }
 
   std::optional<SetOpKind> kind = static_cast<::SetOpKind>(setRel.op());
@@ -529,13 +530,15 @@ importExtensionTable(ImplicitLocOpBuilder builder, const Rel &message) {
       importNamedStruct(builder, baseSchema);
   if (failed(importedNamedStruct))
     return failure();
-  auto [fieldNamesAttr, resultType] = importedNamedStruct.value();
+  auto [fieldNamesAttr, tupleType] = importedNamedStruct.value();
 
   // Import `detail` attribute.
   const pb::Any &detail = extensionTable.detail();
   auto detailAttr = importAny(builder, detail).value();
 
   // Assemble final op.
+  auto resultType =
+      RelationType::get(builder.getContext(), tupleType.getTypes());
   auto extensionTableOp =
       builder.create<ExtensionTableOp>(resultType, fieldNamesAttr, detailAttr);
 
@@ -616,8 +619,8 @@ static mlir::FailureOr<JoinOp> importJoinRel(ImplicitLocOpBuilder builder,
     return failure();
 
   // Build `JoinOp`.
-  Value leftVal = leftOp.value()->getResult(0);
-  Value rightVal = rightOp.value()->getResult(0);
+  Value leftVal = leftOp.value().getResult();
+  Value rightVal = rightOp.value().getResult();
 
   std::optional<JoinType> join_type = static_cast<JoinType>(joinRel.type());
 
@@ -773,7 +776,7 @@ static mlir::FailureOr<FetchOp> importFetchRel(ImplicitLocOpBuilder builder,
   mlir::FailureOr<RelOpInterface> inputOp = importRel(builder, inputRel);
 
   // Build `FetchOp`.
-  Value inputVal = inputOp.value()->getResult(0);
+  Value inputVal = inputOp.value().getResult();
   auto fetchOp =
       builder.create<FetchOp>(inputVal, fetchRel.offset(), fetchRel.count());
 
@@ -794,11 +797,11 @@ static mlir::FailureOr<FilterOp> importFilterRel(ImplicitLocOpBuilder builder,
     return failure();
 
   // Create filter op.
-  auto filterOp = builder.create<FilterOp>(inputOp.value()->getResult(0));
+  auto filterOp = builder.create<FilterOp>(inputOp.value().getResult());
   filterOp.getCondition().push_back(new Block);
   Block &conditionBlock = filterOp.getCondition().front();
-  conditionBlock.addArgument(filterOp.getResult().getType(),
-                             filterOp->getLoc());
+  RelationType inputType = filterOp.getResult().getType();
+  conditionBlock.addArgument(inputType.getStructType(), filterOp->getLoc());
 
   // Create condition region.
   const Expression &expression = filterRel.condition();
@@ -874,9 +877,10 @@ importNamedTable(ImplicitLocOpBuilder builder, const Rel &message) {
       importNamedStruct(builder, baseSchema);
   if (failed(importedNamedStruct))
     return failure();
-  auto [fieldNamesAttr, resultType] = importedNamedStruct.value();
+  auto [fieldNamesAttr, tupleType] = importedNamedStruct.value();
 
   // Assemble final op.
+  auto resultType = RelationType::get(context, tupleType.getTypes());
   auto namedTableOp =
       builder.create<NamedTableOp>(resultType, tableName, fieldNamesAttr);
 
@@ -1019,12 +1023,12 @@ static FailureOr<PlanRelOp> importPlanRel(ImplicitLocOpBuilder builder,
   // Import body of `PlanRelOp`.
   OpBuilder::InsertionGuard insertGuard(builder);
   builder.setInsertionPointToEnd(block);
-  mlir::FailureOr<Operation *> rootRel = importRel(builder, *rel);
+  mlir::FailureOr<RelOpInterface> rootRel = importRel(builder, *rel);
   if (failed(rootRel))
     return failure();
 
   builder.setInsertionPointToEnd(block);
-  builder.create<YieldOp>(rootRel.value()->getResult(0));
+  builder.create<YieldOp>(rootRel.value().getResult());
 
   return planRelOp;
 }
@@ -1050,9 +1054,8 @@ static mlir::FailureOr<ProjectOp> importProjectRel(ImplicitLocOpBuilder builder,
 
   // Create `expressions` block.
   auto conditionBlock = std::make_unique<Block>();
-  auto inputTupleType =
-      cast<TupleType>(inputOp.value()->getResult(0).getType());
-  conditionBlock->addArgument(inputTupleType, inputOp->getLoc());
+  RelationType inputType = inputOp.value().getResult().getType();
+  conditionBlock->addArgument(inputType.getStructType(), inputOp->getLoc());
 
   // Fill `expressions` block with expression trees.
   YieldOp yieldOp;
@@ -1077,14 +1080,14 @@ static mlir::FailureOr<ProjectOp> importProjectRel(ImplicitLocOpBuilder builder,
 
   // Compute output type.
   SmallVector<mlir::Type> resultFieldTypes;
-  resultFieldTypes.reserve(inputTupleType.size() + yieldOp->getNumOperands());
-  append_range(resultFieldTypes, inputTupleType);
+  resultFieldTypes.reserve(inputType.size() + yieldOp->getNumOperands());
+  append_range(resultFieldTypes, inputType);
   append_range(resultFieldTypes, yieldOp->getOperandTypes());
-  auto resultType = TupleType::get(builder.getContext(), resultFieldTypes);
+  auto resultType = RelationType::get(builder.getContext(), resultFieldTypes);
 
   // Create `project` op.
   auto projectOp =
-      builder.create<ProjectOp>(resultType, inputOp.value()->getResult(0));
+      builder.create<ProjectOp>(resultType, inputOp.value().getResult());
   projectOp.getExpressions().push_back(conditionBlock.release());
 
   // Import advanced extension if it is present.
@@ -1173,7 +1176,7 @@ static mlir::FailureOr<RelOpInterface> importRel(ImplicitLocOpBuilder builder,
   SmallVector<int64_t> mapping;
   append_range(mapping, emit.output_mapping());
   ArrayAttr mappingAttr = builder.getI64ArrayAttr(mapping);
-  auto emitOp = builder.create<EmitOp>(op->getResult(0), mappingAttr);
+  auto emitOp = builder.create<EmitOp>(op.getResult(), mappingAttr);
 
   return {emitOp};
 }

@@ -496,6 +496,7 @@ def Substrait_AggregateOp : Substrait_RelOp<"aggregate", [
 
     ```mlir
     %0 = ...
+    // XXX: update example snippets, here and below
     %1 = aggregate %0 : tuple<si32> -> tuple<si32, si32>
       groupings {
       ^bb0(%arg : tuple<si32>):

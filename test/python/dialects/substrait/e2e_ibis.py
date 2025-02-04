@@ -40,5 +40,5 @@ def testNamedTable():
   # CHECK-NEXT: module
   # CHECK-NEXT:   substrait.plan version {{.*}} producer "ibis-substrait" {
   # CHECK-NEXT:     relation as ["a", "b"] {
-  # CHECK-NEXT:       %[[V0:.*]] = named_table @t as ["a", "b"] : tuple<si32, si32>
-  # CHECK-NEXT:       yield %[[V0]] : tuple<si32, si32>
+  # CHECK-NEXT:       %[[V0:.*]] = named_table @t as ["a", "b"] : <si32, si32>
+  # CHECK-NEXT:       yield %[[V0]] : !substrait.relation<si32, si32>

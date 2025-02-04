@@ -12,7 +12,7 @@
 
 # CHECK-LABEL: substrait.plan
 # CHECK:         relation
-# CHECK:         %[[V0:.*]] = named_table @t1 as [] : tuple<>
+# CHECK:         %[[V0:.*]] = named_table @t1 as [] : <>
 # CHECK-NEXT:    yield %[[V0]] :
 
 relations {
@@ -42,7 +42,7 @@ version {
 
 # CHECK-LABEL: substrait.plan
 # CHECK:         relation
-# CHECK:         %[[V0:.*]] = named_table @t1 as ["a"] : tuple<si32>
+# CHECK:         %[[V0:.*]] = named_table @t1 as ["a"] : <si32>
 # CHECK-NEXT:    yield %[[V0]] :
 
 relations {
@@ -78,7 +78,7 @@ version {
 
 # CHECK-LABEL: substrait.plan
 # CHECK:         relation
-# CHECK:         %[[V0:.*]] = named_table @t1 as ["a", "b"] : tuple<si32, si32>
+# CHECK:         %[[V0:.*]] = named_table @t1 as ["a", "b"] : <si32, si32>
 # CHECK-NEXT:    yield %[[V0]] :
 
 relations {
@@ -121,7 +121,7 @@ version {
 # CHECK-LABEL: substrait.plan
 # CHECK:         relation
 # CHECK:         %[[V0:.*]] = named_table @t1
-# CHECK-SAME:      as ["outer", "inner"] : tuple<tuple<si32>>
+# CHECK-SAME:      as ["outer", "inner"] : <tuple<si32>>
 # CHECK-NEXT:    yield %[[V0]] :
 
 relations {
@@ -163,7 +163,7 @@ version {
 # CHECK-LABEL: substrait.plan
 # CHECK:         relation
 # CHECK:         %[[V0:.*]] = named_table @t1
-# CHECK-SAME:      as ["a", "a"] : tuple<tuple<si32>>
+# CHECK-SAME:      as ["a", "a"] : <tuple<si32>>
 # CHECK-NEXT:    yield %[[V0]] :
 
 relations {
@@ -206,7 +206,7 @@ version {
 # CHECK:         named_table @t1 as ["a"]
 # CHECK-SAME:        advanced_extension optimization = "\08*"
 # CHECK-SAME:          : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:        : tuple<si32>
+# CHECK-SAME:        : <si32>
 
 relations {
   rel {

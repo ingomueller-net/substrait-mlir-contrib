@@ -13,9 +13,8 @@
 # CHECK-LABEL: substrait.plan
 # CHECK:         relation
 # CHECK:           %[[V0:.*]] = named_table
-# CHECK-NEXT:      %[[V1:.*]] = fetch 5 offset 3 from %[[V0]]
-# CHECK-SAME:        : tuple<si32>
-# CHECK-NEXT:      yield %[[V1]] : tuple<si32>
+# CHECK-NEXT:      %[[V1:.*]] = fetch 5 offset 3 from %[[V0]] : <si32>
+# CHECK-NEXT:      yield %[[V1]] : !substrait.relation<si32>
 
 relations {
   rel {
@@ -61,7 +60,7 @@ version {
 # CHECK-LABEL: substrait.plan
 # CHECK:           fetch 3 from %{{.*}} advanced_extension optimization = "\08*"
 # CHECK-SAME:          : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:        : tuple<si32>
+# CHECK-SAME:        : <si32>
 
 relations {
   rel {

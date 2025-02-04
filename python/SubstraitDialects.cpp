@@ -15,6 +15,7 @@
 #include "llvm/Support/Signals.h"
 
 namespace nb = nanobind;
+using namespace mlir::python::nanobind_adaptors;
 
 NB_MODULE(_substraitDialects, mainModule) {
 #ifndef NDEBUG
@@ -45,6 +46,26 @@ NB_MODULE(_substraitDialects, mainModule) {
               "context: Optional[substrait_mlir.ir.Context] = None,"
               "load: bool = True) -> None"),
       "Register and optionally load the dialect with the given context");
+
+  //
+  // Types
+  //
+
+  mlir_type_subclass(substraitModule, "RelationType",
+                     mlirTypeIsASubstraitRelationType)
+      .def_classmethod(
+          "get",
+          [](const nb::object &cls, std::vector<MlirType> fieldTypes,
+             MlirContext context) {
+            return cls(mlirSubstraitRelationTypeGet(context, fieldTypes.size(),
+                                                    fieldTypes.data()));
+          },
+          nb::arg("cls"), nb::arg("element_type"),
+          nb::arg("context").none() = nb::none(),
+          nb::sig("def get(cls: object, "
+                  "element_type: typing.Sequence[substrait_mlir.ir.Type], "
+                  "context: typing.Optional[substrait_mlir.ir.Context] = None) "
+                  "-> RelationType"));
 
   //
   // Import

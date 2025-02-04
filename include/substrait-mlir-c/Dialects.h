@@ -22,6 +22,15 @@ extern "C" {
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(Substrait, substrait);
 
+/// Checks whether the given type is a `RelationType`.
+MLIR_CAPI_EXPORTED
+bool mlirTypeIsASubstraitRelationType(MlirType type);
+
+/// Gets the `RelationType` with the given `fieldTypes`.
+MLIR_CAPI_EXPORTED
+MlirType mlirSubstraitRelationTypeGet(MlirContext context, intptr_t numFields,
+                                      MlirType *fieldTypes);
+
 /// Serialization/deserialization format for exporting/importing Substrait
 /// plans. This corresponds to `::mlir::substrait::SerdeFormat`.
 typedef enum MlirSubstraitSerdeFormat {

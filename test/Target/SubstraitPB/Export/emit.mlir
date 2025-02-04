@@ -22,10 +22,10 @@
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a"] : tuple<si32>
-    %1 = cross %0 x %0 : tuple<si32> x tuple<si32>
-    %2 = emit [1, 0] from %1 : tuple<si32, si32> -> tuple<si32, si32>
-    yield %2 : tuple<si32, si32>
+    %0 = named_table @t1 as ["a"] : <si32>
+    %1 = cross %0 x %0 : <si32> x <si32>
+    %2 = emit [1, 0] from %1 : <si32, si32> -> <si32, si32>
+    yield %2 : !substrait.relation<si32, si32>
   }
 }
 
@@ -43,9 +43,9 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si32, si1>
-    %1 = emit [1] from %0 : tuple<si32, si1> -> tuple<si1>
-    yield %1 : tuple<si1>
+    %0 = named_table @t1 as ["a", "b"] : <si32, si1>
+    %1 = emit [1] from %0 : <si32, si1> -> <si1>
+    yield %1 : !substrait.relation<si1>
   }
 }
 
@@ -67,13 +67,13 @@ substrait.plan version 0 : 42 : 1 {
 
 substrait.plan version 0 : 42 : 1 {
   relation {
-    %0 = named_table @t1 as ["a", "b"] : tuple<si32, si1>
-    %1 = filter %0 : tuple<si32, si1> {
+    %0 = named_table @t1 as ["a", "b"] : <si32, si1>
+    %1 = filter %0 : <si32, si1> {
     ^bb0(%arg : tuple<si32, si1>):
       %2 = literal -1 : si1
       yield %2 : si1
     }
-    %2 = emit [1] from %1 : tuple<si32, si1> -> tuple<si1>
-    yield %2 : tuple<si1>
+    %2 = emit [1] from %1 : <si32, si1> -> <si1>
+    yield %2 : !substrait.relation<si1>
   }
 }

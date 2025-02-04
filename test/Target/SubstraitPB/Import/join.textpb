@@ -14,8 +14,9 @@
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join unspecified %[[V0]], %[[V1]] : tuple<si32>, tuple<si32> -> tuple<si32, si32>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si32, si32>
+# CHECK-NEXT:      %[[V2:.*]] = join unspecified %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si32>, <si32> -> <si32, si32>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si32, si32>
 
 relations {
   rel {
@@ -82,8 +83,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join inner %[[V0]], %[[V1]] : tuple<si32>, tuple<si32> -> tuple<si32, si32>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si32, si32>
+# CHECK-NEXT:      %[[V2:.*]] = join inner %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si32>, <si32> -> <si32, si32>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si32, si32>
 
 relations {
   rel {
@@ -151,8 +153,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join outer %[[V0]], %[[V1]] : tuple<si32>, tuple<si32> -> tuple<si32, si32>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si32, si32>
+# CHECK-NEXT:      %[[V2:.*]] = join outer %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si32>, <si32> -> <si32, si32>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si32, si32>
 
 relations {
   rel {
@@ -220,8 +223,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join left %[[V0]], %[[V1]] : tuple<si32>, tuple<si32> -> tuple<si32, si32>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si32, si32>
+# CHECK-NEXT:      %[[V2:.*]] = join left %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si32>, <si32> -> <si32, si32>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si32, si32>
 
 relations {
   rel {
@@ -289,8 +293,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join right %[[V0]], %[[V1]] : tuple<si32>, tuple<si32> -> tuple<si32, si32>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si32, si32>
+# CHECK-NEXT:      %[[V2:.*]] = join right %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si32>, <si32> -> <si32, si32>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si32, si32>
 
 relations {
   rel {
@@ -358,8 +363,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join semi %[[V0]], %[[V1]] : tuple<si1>, tuple<si32> -> tuple<si1>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si1>
+# CHECK-NEXT:      %[[V2:.*]] = join semi %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si1>, <si32> -> <si1>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si1>
 
 relations {
   rel {
@@ -427,8 +433,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join anti %[[V0]], %[[V1]] : tuple<si1>, tuple<si32> -> tuple<si1>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si1>
+# CHECK-NEXT:      %[[V2:.*]] = join anti %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si1>, <si32> -> <si1>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si1>
 
 relations {
   rel {
@@ -496,8 +503,9 @@ version {
 # CHECK:         relation {
 # CHECK:           %[[V0:.*]] = named_table
 # CHECK:           %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = join single %[[V0]], %[[V1]] : tuple<si32>, tuple<si1> -> tuple<si1>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si1>
+# CHECK-NEXT:      %[[V2:.*]] = join single %[[V0]], %[[V1]] :
+# CHECK-SAME:                     <si32>, <si1> -> <si1>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si1>
 
 relations {
   rel {
@@ -565,7 +573,7 @@ version {
 # CHECK:           join inner %{{.*}}, %{{[^ ]*}}
 # CHECK-SAME:          advanced_extension optimization = "\08*"
 # CHECK-SAME:            : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:          : tuple<si32>, tuple<si32> -> tuple<si32, si32>
+# CHECK-SAME:          : <si32>, <si32> -> <si32, si32>
 
 relations {
   rel {

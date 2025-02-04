@@ -14,9 +14,8 @@
 # CHECK-NEXT:    relation {
 # CHECK-NEXT:      %[[V0:.*]] = named_table
 # CHECK-NEXT:      %[[V1:.*]] = named_table
-# CHECK-NEXT:      %[[V2:.*]] = cross %[[V0]] x %[[V1]]
-# CHECK-SAME:        : tuple<si32> x tuple<si32>
-# CHECK-NEXT:      yield %[[V2]] : tuple<si32, si32>
+# CHECK-NEXT:      %[[V2:.*]] = cross %[[V0]] x %[[V1]] : <si32> x <si32>
+# CHECK-NEXT:      yield %[[V2]] : !substrait.relation<si32, si32>
 
 relations {
   rel {
@@ -84,7 +83,7 @@ version {
 # CHECK:           cross %{{.*}} x %{{[^ ]*}}
 # CHECK-SAME:        advanced_extension optimization = "\08*"
 # CHECK-SAME:          : !substrait.any<"type.googleapis.com/google.protobuf.Int32Value">
-# CHECK-SAME:        : tuple<si32> x tuple<si1>
+# CHECK-SAME:        : <si32> x <si1>
 
 relations {
   rel {
