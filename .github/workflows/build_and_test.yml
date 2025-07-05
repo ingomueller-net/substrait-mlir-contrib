@@ -20,7 +20,7 @@ jobs:
           - RelWithDebInfo
           - Release
         exclude:
-          - cmake_build_type: ${{ github.event_name != 'push' && 'Release' }}
+          - cmake_build_type: ${{ github.event_name != 'pull_request' && 'Release' }}
     env:
       LLVM_SYMBOLIZER_PATH: /usr/lib/llvm-14/bin/llvm-symbolizer
     steps:
